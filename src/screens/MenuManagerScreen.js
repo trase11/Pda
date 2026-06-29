@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, Modal, TextInput,
-  StyleSheet, SafeAreaView, StatusBar, Alert, SectionList,
+  StyleSheet, SafeAreaView, StatusBar, SectionList,
 } from 'react-native';
 import { useApp } from '../context/AppContext';
+import { confirmAction } from '../utils/confirm';
 
 export default function MenuManagerScreen() {
   const { menu, addMenuItem, updateMenuItemPrice, deleteMenuItem } = useApp();
@@ -33,10 +34,12 @@ export default function MenuManagerScreen() {
   }
 
   function handleDelete(catId, item) {
-    Alert.alert(`Διαγραφή "${item.name}"`, 'Σίγουρα;', [
-      { text: 'Άκυρο', style: 'cancel' },
-      { text: 'Διαγραφή', style: 'destructive', onPress: () => deleteMenuItem(catId, item.id) },
-    ]);
+    confirmAction(
+      `Διαγραφή "${item.name}"`,
+      'Σίγουρα;',
+      () => deleteMenuItem(catId, item.id),
+      'Διαγραφή'
+    );
   }
 
   const sections = menu.map(cat => ({ title: cat.name, icon: cat.icon, catId: cat.id, data: cat.items }));

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, TextInput,
-  StyleSheet, SafeAreaView, StatusBar, Alert,
+  StyleSheet, SafeAreaView, StatusBar,
 } from 'react-native';
 import { useApp } from '../context/AppContext';
+import { confirmAction } from '../utils/confirm';
 
 export default function TableDetailScreen({ route, navigation }) {
   const { tableId } = route.params;
@@ -22,10 +23,12 @@ export default function TableDetailScreen({ route, navigation }) {
   const change = paidNum - total;
 
   function handleClear() {
-    Alert.alert('Εκκαθάριση', 'Να διαγραφεί η παραγγελία;', [
-      { text: 'Άκυρο', style: 'cancel' },
-      { text: 'Εκκαθάριση', style: 'destructive', onPress: () => { clearTable(tableId); setShowBill(false); setPaid(''); } },
-    ]);
+    confirmAction(
+      'Εκκαθάριση',
+      'Να διαγραφεί η παραγγελία;',
+      () => { clearTable(tableId); setShowBill(false); setPaid(''); },
+      'Εκκαθάριση'
+    );
   }
 
   return (

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, Modal, TextInput,
-  StyleSheet, Alert, SafeAreaView, StatusBar,
+  StyleSheet, SafeAreaView, StatusBar,
 } from 'react-native';
 import { useApp } from '../context/AppContext';
+import { confirmAction } from '../utils/confirm';
 
 export default function TablesScreen({ navigation }) {
   const { tables, addTable, removeTable, getTableTotal } = useApp();
@@ -19,13 +20,11 @@ export default function TablesScreen({ navigation }) {
   }
 
   function handleDelete(table) {
-    Alert.alert(
+    confirmAction(
       `Κλείσιμο τραπεζιού "${table.name}"`,
       'Θέλεις σίγουρα να κλείσεις αυτό το τραπέζι; Η παραγγελία θα χαθεί.',
-      [
-        { text: 'Άκυρο', style: 'cancel' },
-        { text: 'Κλείσιμο', style: 'destructive', onPress: () => removeTable(table.id) },
-      ]
+      () => removeTable(table.id),
+      'Κλείσιμο'
     );
   }
 
