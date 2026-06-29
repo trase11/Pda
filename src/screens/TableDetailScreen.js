@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity,
+  View, Text, FlatList, TouchableOpacity, TextInput,
   StyleSheet, SafeAreaView, StatusBar, Alert,
 } from 'react-native';
 import { useApp } from '../context/AppContext';
@@ -114,13 +114,17 @@ export default function TableDetailScreen({ route, navigation }) {
               <Text style={s.billTotalVal}>{total.toFixed(2)}€</Text>
             </View>
 
-            <Text style={s.payLabel}>Έδωσε:</Text>
-            <View style={s.moneyBtns}>
-              {[5, 10, 20, 50, 100].map(v => (
-                <TouchableOpacity key={v} style={[s.moneyBtn, paidNum === v && s.moneyBtnActive]} onPress={() => setPaid(v.toString())}>
-                  <Text style={[s.moneyBtnText, paidNum === v && s.moneyBtnTextActive]}>{v}€</Text>
-                </TouchableOpacity>
-              ))}
+            <Text style={s.payLabel}>Πόσα έδωσε ο πελάτης:</Text>
+            <View style={s.payInputRow}>
+              <TextInput
+                style={s.payInput}
+                placeholder="0.00"
+                placeholderTextColor="#555"
+                value={paid}
+                onChangeText={setPaid}
+                keyboardType="decimal-pad"
+              />
+              <Text style={s.payInputEuro}>€</Text>
             </View>
 
             {paidNum > 0 && (
@@ -195,11 +199,9 @@ const s = StyleSheet.create({
   billTotalLabel: { fontSize: 18, fontWeight: '700', color: '#fff' },
   billTotalVal: { fontSize: 22, fontWeight: '800', color: '#4ecca3' },
   payLabel: { fontSize: 14, color: '#888', marginBottom: 10 },
-  moneyBtns: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  moneyBtn: { flex: 1, backgroundColor: '#2d2d4e', borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#3d3d5e' },
-  moneyBtnActive: { backgroundColor: '#1a3a2e', borderColor: '#4ecca3' },
-  moneyBtnText: { color: '#aaa', fontSize: 14, fontWeight: '700' },
-  moneyBtnTextActive: { color: '#4ecca3' },
+  payInputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a1a2e', borderRadius: 12, borderWidth: 1, borderColor: '#4ecca3', paddingHorizontal: 16, marginBottom: 16 },
+  payInput: { flex: 1, fontSize: 28, fontWeight: '800', color: '#fff', paddingVertical: 14 },
+  payInputEuro: { fontSize: 28, fontWeight: '800', color: '#4ecca3' },
   changeRow: { backgroundColor: '#1a3a2e', borderRadius: 12, padding: 16, flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
   changeRowRed: { backgroundColor: '#3a1a1a' },
   changeLabel: { fontSize: 16, fontWeight: '600', color: '#4ecca3' },
