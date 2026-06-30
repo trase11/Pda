@@ -5,12 +5,13 @@ import { getFirestore } from 'firebase/firestore';
 // Τα παίρνεις από: console.firebase.google.com → Project settings → Your apps → Web app.
 // Αντικατέστησε ΟΛΕΣ τις τιμές "REPLACE_ME" με τις δικές σου.
 const firebaseConfig = {
-  apiKey: 'REPLACE_ME',
-  authDomain: 'REPLACE_ME',
-  projectId: 'REPLACE_ME',
-  storageBucket: 'REPLACE_ME',
-  messagingSenderId: 'REPLACE_ME',
-  appId: 'REPLACE_ME',
+  apiKey: 'AIzaSyAYIe7UEOkcVPv6ztXbl5Q_ll0P6loN5jc',
+  authDomain: 'pda-r-a0378.firebaseapp.com',
+  projectId: 'pda-r-a0378',
+  storageBucket: 'pda-r-a0378.firebasestorage.app',
+  messagingSenderId: '810485381161',
+  appId: '1:810485381161:web:5f2f649d4141e8cff9c438',
+  measurementId: 'G-18YNH2R3MJ',
 };
 
 // Ενεργοποιείται μόνο όταν έχεις βάλει πραγματικά στοιχεία (όχι "REPLACE_ME").
