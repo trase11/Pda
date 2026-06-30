@@ -7,7 +7,11 @@ import { useApp } from '../context/AppContext';
 import { confirmAction } from '../utils/confirm';
 
 export default function MenuManagerScreen() {
-  const { menu, addMenuItem, updateMenuItemPrice, deleteMenuItem } = useApp();
+  const { menu, addMenuItem, updateMenuItemPrice, deleteMenuItem, setRole } = useApp();
+
+  function handleChangeRole() {
+    confirmAction('Αλλαγή ρόλου', 'Να επιστρέψεις στην επιλογή ρόλου;', () => setRole(null), 'Αλλαγή');
+  }
   const [addModal, setAddModal] = useState(false);
   const [editModal, setEditModal] = useState(null);
   const [selectedCat, setSelectedCat] = useState(menu[0]?.id ?? '');
@@ -49,6 +53,9 @@ export default function MenuManagerScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#1a1a2e" />
       <View style={s.header}>
         <Text style={s.headerTitle}>Διαχείριση Menu</Text>
+        <TouchableOpacity onPress={handleChangeRole} style={s.roleBtn}>
+          <Text style={s.roleBtnText}>Αλλαγή ρόλου</Text>
+        </TouchableOpacity>
       </View>
 
       <SectionList
@@ -135,8 +142,10 @@ export default function MenuManagerScreen() {
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#1a1a2e' },
-  header: { padding: 20, paddingTop: 10, borderBottomWidth: 1, borderBottomColor: '#2d2d4e' },
+  header: { padding: 20, paddingTop: 10, borderBottomWidth: 1, borderBottomColor: '#2d2d4e', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerTitle: { fontSize: 28, fontWeight: '800', color: '#fff' },
+  roleBtn: { backgroundColor: '#2d2d4e', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
+  roleBtnText: { color: '#aaa', fontSize: 13, fontWeight: '600' },
   list: { padding: 16, gap: 6 },
   sectionHeader: { fontSize: 14, fontWeight: '700', color: '#888', marginTop: 14, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 },
   row: {

@@ -8,6 +8,7 @@ export function AppProvider({ children }) {
   const [tables, setTables] = useState([]);
   const [menu, setMenu] = useState(MENU);
   const [history, setHistory] = useState([]);
+  const [role, setRoleState] = useState(null); // null | 'waiter' | 'kitchen'
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -23,11 +24,18 @@ export function AppProvider({ children }) {
       const t = await AsyncStorage.getItem('tables');
       const m = await AsyncStorage.getItem('menu');
       const h = await AsyncStorage.getItem('history');
+      const r = await AsyncStorage.getItem('role');
       if (t) setTables(JSON.parse(t));
       if (m) setMenu(JSON.parse(m));
       if (h) setHistory(JSON.parse(h));
+      if (r) setRoleState(r);
     } catch {}
     setLoaded(true);
+  }
+
+  function setRole(r) {
+    setRoleState(r);
+    AsyncStorage.setItem('role', r ?? '').catch(() => {});
   }
 
   async function save() {
@@ -136,7 +144,8 @@ export function AppProvider({ children }) {
 
   return (
     <AppContext.Provider value={{
-      tables, menu, history, addTable, removeTable, clearTable,
+      tables, menu, history, role, setRole, loaded,
+      addTable, removeTable, clearTable,
       addItemToTable, removeItemFromTable, incrementOrderItem, deleteOrderItem,
       getTableTotal, payItems, clearHistory,
       addMenuItem, updateMenuItemPrice, deleteMenuItem,
