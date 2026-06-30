@@ -7,6 +7,7 @@ const AppContext = createContext();
 export function AppProvider({ children }) {
   const [tables, setTables] = useState([]);
   const [menu, setMenu] = useState(MENU);
+  const [history, setHistory] = useState([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -15,14 +16,16 @@ export function AppProvider({ children }) {
 
   useEffect(() => {
     if (loaded) save();
-  }, [tables, menu]);
+  }, [tables, menu, history]);
 
   async function load() {
     try {
       const t = await AsyncStorage.getItem('tables');
       const m = await AsyncStorage.getItem('menu');
+      const h = await AsyncStorage.getItem('history');
       if (t) setTables(JSON.parse(t));
       if (m) setMenu(JSON.parse(m));
+      if (h) setHistory(JSON.parse(h));
     } catch {}
     setLoaded(true);
   }
@@ -31,6 +34,7 @@ export function AppProvider({ children }) {
     try {
       await AsyncStorage.setItem('tables', JSON.stringify(tables));
       await AsyncStorage.setItem('menu', JSON.stringify(menu));
+      await AsyncStorage.setItem('history', JSON.stringify(history));
     } catch {}
   }
 
@@ -87,6 +91,37 @@ export function AppProvider({ children }) {
     return t.orders.reduce((sum, o) => sum + o.price * o.qty, 0);
   }
 
+  // Πληρωμή επιλεγμένων ειδών: καταγράφει την πώληση στο ιστορικό
+  // και αφαιρεί τα πληρωμένα είδη από το τραπέζι.
+  function payItems(tableId, paidItems, { method, given = 0, change = 0 }) {
+    const table = tables.find(t => t.id === tableId);
+    const tableName = table ? table.name : '';
+    const total = paidItems.reduce((sum, o) => sum + o.price * o.qty, 0);
+
+    const sale = {
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      tableName,
+      items: paidItems.map(o => ({ name: o.name, price: o.price, qty: o.qty })),
+      total,
+      method, // 'cash' | 'card'
+      given,
+      change,
+      paidAt: new Date().toISOString(),
+    };
+    setHistory(prev => [sale, ...prev]);
+
+    const paidIds = paidItems.map(o => o.itemId);
+    setTables(prev => prev.map(t => {
+      if (t.id !== tableId) return t;
+      return { ...t, orders: t.orders.filter(o => !paidIds.includes(o.itemId)) };
+    }));
+    return sale;
+  }
+
+  function clearHistory() {
+    setHistory([]);
+  }
+
   function addMenuItem(categoryId, item) {
     setMenu(prev => prev.map(cat => cat.id === categoryId ? { ...cat, items: [...cat.items, { ...item, id: `custom_${Date.now()}` }] } : cat));
   }
@@ -101,9 +136,10 @@ export function AppProvider({ children }) {
 
   return (
     <AppContext.Provider value={{
-      tables, menu, addTable, removeTable, clearTable,
+      tables, menu, history, addTable, removeTable, clearTable,
       addItemToTable, removeItemFromTable, incrementOrderItem, deleteOrderItem,
-      getTableTotal, addMenuItem, updateMenuItemPrice, deleteMenuItem,
+      getTableTotal, payItems, clearHistory,
+      addMenuItem, updateMenuItemPrice, deleteMenuItem,
     }}>
       {children}
     </AppContext.Provider>

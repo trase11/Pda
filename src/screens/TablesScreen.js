@@ -4,10 +4,12 @@ import {
   StyleSheet, SafeAreaView, StatusBar,
 } from 'react-native';
 import { useApp } from '../context/AppContext';
+import { useKitchen } from '../context/KitchenContext';
 import { confirmAction } from '../utils/confirm';
 
 export default function TablesScreen({ navigation }) {
   const { tables, addTable, removeTable, getTableTotal } = useApp();
+  const { readyOrders, markServed } = useKitchen();
   const [modalVisible, setModalVisible] = useState(false);
   const [tableName, setTableName] = useState('');
 
@@ -40,6 +42,19 @@ export default function TablesScreen({ navigation }) {
         <Text style={s.headerTitle}>Τραπέζια</Text>
         <Text style={s.headerSub}>{tables.length} ανοιχτά</Text>
       </View>
+
+      {readyOrders.length > 0 && (
+        <View style={s.readyBanner}>
+          {readyOrders.map(o => (
+            <View key={o.id} style={s.readyItem}>
+              <Text style={s.readyText}>🔔 Έτοιμο: <Text style={s.readyTable}>{o.tableName}</Text></Text>
+              <TouchableOpacity style={s.servedBtn} onPress={() => markServed(o.id)}>
+                <Text style={s.servedBtnText}>Σερβιρίστηκε</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
 
       {tables.length === 0 ? (
         <View style={s.empty}>
@@ -111,6 +126,12 @@ const s = StyleSheet.create({
   header: { padding: 20, paddingTop: 10, borderBottomWidth: 1, borderBottomColor: '#2d2d4e' },
   headerTitle: { fontSize: 28, fontWeight: '800', color: '#fff' },
   headerSub: { fontSize: 14, color: '#888', marginTop: 2 },
+  readyBanner: { padding: 12, gap: 8 },
+  readyItem: { backgroundColor: '#1a3a2e', borderRadius: 12, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#4ecca3' },
+  readyText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  readyTable: { color: '#4ecca3', fontWeight: '800' },
+  servedBtn: { backgroundColor: '#4ecca3', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
+  servedBtnText: { color: '#1a1a2e', fontSize: 13, fontWeight: '700' },
   list: { padding: 16, gap: 12 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
   emptyIcon: { fontSize: 60 },

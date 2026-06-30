@@ -5,10 +5,13 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text } from 'react-native';
 import { AppProvider } from './src/context/AppContext';
+import { KitchenProvider } from './src/context/KitchenContext';
 import TablesScreen from './src/screens/TablesScreen';
 import TableDetailScreen from './src/screens/TableDetailScreen';
 import AddItemsScreen from './src/screens/AddItemsScreen';
 import MenuManagerScreen from './src/screens/MenuManagerScreen';
+import KitchenScreen from './src/screens/KitchenScreen';
+import HistoryScreen from './src/screens/HistoryScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -26,6 +29,7 @@ function TablesStack() {
 export default function App() {
   return (
     <AppProvider>
+      <KitchenProvider>
       <NavigationContainer>
         <Tab.Navigator
           screenOptions={{
@@ -45,6 +49,22 @@ export default function App() {
             }}
           />
           <Tab.Screen
+            name="KitchenTab"
+            component={KitchenScreen}
+            options={{
+              tabBarLabel: 'Κουζίνα',
+              tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🍳</Text>,
+            }}
+          />
+          <Tab.Screen
+            name="HistoryTab"
+            component={HistoryScreen}
+            options={{
+              tabBarLabel: 'Ιστορικό',
+              tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🧾</Text>,
+            }}
+          />
+          <Tab.Screen
             name="MenuTab"
             component={MenuManagerScreen}
             options={{
@@ -54,6 +74,7 @@ export default function App() {
           />
         </Tab.Navigator>
       </NavigationContainer>
+      </KitchenProvider>
     </AppProvider>
   );
 }
