@@ -6,6 +6,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, View } from 'react-native';
 import { AppProvider, useApp } from './src/context/AppContext';
 import { KitchenProvider } from './src/context/KitchenContext';
+import { TasksProvider } from './src/context/TasksContext';
 import TablesScreen from './src/screens/TablesScreen';
 import TableDetailScreen from './src/screens/TableDetailScreen';
 import AddItemsScreen from './src/screens/AddItemsScreen';
@@ -13,6 +14,8 @@ import MenuManagerScreen from './src/screens/MenuManagerScreen';
 import KitchenScreen from './src/screens/KitchenScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import RolePickerScreen from './src/screens/RolePickerScreen';
+import RunnerScreen from './src/screens/RunnerScreen';
+import AssignTaskScreen from './src/screens/AssignTaskScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -48,6 +51,14 @@ function WaiterApp() {
           }}
         />
         <Tab.Screen
+          name="TasksTab"
+          component={AssignTaskScreen}
+          options={{
+            tabBarLabel: 'Δουλειές',
+            tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🧹</Text>,
+          }}
+        />
+        <Tab.Screen
           name="HistoryTab"
           component={HistoryScreen}
           options={{
@@ -80,6 +91,9 @@ function Root() {
   if (role === 'kitchen') {
     return <KitchenScreen />;
   }
+  if (role === 'runner') {
+    return <RunnerScreen />;
+  }
   return <WaiterApp />;
 }
 
@@ -87,7 +101,9 @@ export default function App() {
   return (
     <AppProvider>
       <KitchenProvider>
-        <Root />
+        <TasksProvider>
+          <Root />
+        </TasksProvider>
       </KitchenProvider>
     </AppProvider>
   );

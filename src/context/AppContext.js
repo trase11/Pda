@@ -1,96 +1,176 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  collection, doc, addDoc, setDoc, updateDoc, deleteDoc,
+  onSnapshot, query, orderBy, getDocs, writeBatch,
+} from 'firebase/firestore';
+import { db, firebaseEnabled } from '../firebase';
 import { MENU } from '../data/menuData';
 
 const AppContext = createContext();
+
+// Όταν υπάρχει Firebase, όλα (τραπέζια, ιστορικό, κατάλογος) είναι κοινά
+// σε πραγματικό χρόνο μεταξύ συσκευών. Αλλιώς, πέφτουμε σε τοπική
+// αποθήκευση ανά συσκευή (AsyncStorage), όπως πριν.
+const useCloud = firebaseEnabled && !!db;
+
+const TABLES = 'tables';
+const SALES = 'sales';
+const MENU_DOC_ID = 'menu'; // config/menu -> { categories: [...] }
 
 export function AppProvider({ children }) {
   const [tables, setTables] = useState([]);
   const [menu, setMenu] = useState(MENU);
   const [history, setHistory] = useState([]);
-  const [role, setRoleState] = useState(null); // null | 'waiter' | 'kitchen'
+  const [role, setRoleState] = useState(null); // null | 'waiter' | 'kitchen' | 'runner'
+  const [waiterName, setWaiterNameState] = useState('');
   const [loaded, setLoaded] = useState(false);
 
+  // ---- Φόρτωση ρόλου/ονόματος (πάντα ανά συσκευή) ----
   useEffect(() => {
-    load();
+    (async () => {
+      try {
+        const r = await AsyncStorage.getItem('role');
+        const n = await AsyncStorage.getItem('waiterName');
+        if (r) setRoleState(r);
+        if (n) setWaiterNameState(n);
+      } catch {}
+      if (!useCloud) {
+        // Τοπική φόρτωση δεδομένων (χωρίς Firebase)
+        try {
+          const t = await AsyncStorage.getItem('tables');
+          const m = await AsyncStorage.getItem('menu');
+          const h = await AsyncStorage.getItem('history');
+          if (t) setTables(JSON.parse(t));
+          if (m) setMenu(JSON.parse(m));
+          if (h) setHistory(JSON.parse(h));
+        } catch {}
+      }
+      setLoaded(true);
+    })();
   }, []);
 
+  // ---- Real-time συνδρομές (μόνο με Firebase) ----
   useEffect(() => {
-    if (loaded) save();
-  }, [tables, menu, history]);
+    if (!useCloud) return;
 
-  async function load() {
-    try {
-      const t = await AsyncStorage.getItem('tables');
-      const m = await AsyncStorage.getItem('menu');
-      const h = await AsyncStorage.getItem('history');
-      const r = await AsyncStorage.getItem('role');
-      if (t) setTables(JSON.parse(t));
-      if (m) setMenu(JSON.parse(m));
-      if (h) setHistory(JSON.parse(h));
-      if (r) setRoleState(r);
-    } catch {}
-    setLoaded(true);
-  }
+    const unsubTables = onSnapshot(
+      query(collection(db, TABLES), orderBy('createdAt', 'asc')),
+      snap => setTables(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      err => console.warn('Tables sync error:', err)
+    );
+
+    const unsubSales = onSnapshot(
+      query(collection(db, SALES), orderBy('paidAt', 'desc')),
+      snap => setHistory(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      err => console.warn('Sales sync error:', err)
+    );
+
+    const menuRef = doc(db, 'config', MENU_DOC_ID);
+    const unsubMenu = onSnapshot(
+      menuRef,
+      snap => {
+        if (snap.exists() && Array.isArray(snap.data().categories)) {
+          setMenu(snap.data().categories);
+        } else {
+          // Πρώτη εκκίνηση: σπέρνουμε τον προεπιλεγμένο κατάλογο.
+          setDoc(menuRef, { categories: MENU }).catch(() => {});
+          setMenu(MENU);
+        }
+      },
+      err => console.warn('Menu sync error:', err)
+    );
+
+    return () => { unsubTables(); unsubSales(); unsubMenu(); };
+  }, []);
+
+  // ---- Τοπική αποθήκευση (μόνο χωρίς Firebase) ----
+  useEffect(() => {
+    if (useCloud || !loaded) return;
+    AsyncStorage.setItem('tables', JSON.stringify(tables)).catch(() => {});
+    AsyncStorage.setItem('menu', JSON.stringify(menu)).catch(() => {});
+    AsyncStorage.setItem('history', JSON.stringify(history)).catch(() => {});
+  }, [tables, menu, history, loaded]);
 
   function setRole(r) {
     setRoleState(r);
     AsyncStorage.setItem('role', r ?? '').catch(() => {});
   }
 
-  async function save() {
-    try {
-      await AsyncStorage.setItem('tables', JSON.stringify(tables));
-      await AsyncStorage.setItem('menu', JSON.stringify(menu));
-      await AsyncStorage.setItem('history', JSON.stringify(history));
-    } catch {}
+  function setWaiterName(n) {
+    setWaiterNameState(n);
+    AsyncStorage.setItem('waiterName', n ?? '').catch(() => {});
   }
 
-  function addTable(name) {
-    const t = { id: Date.now().toString(), name, orders: [], createdAt: new Date().toISOString() };
-    setTables(prev => [...prev, t]);
-    return t.id;
+  // Βοηθός: γράφει τα νέα orders ενός τραπεζιού (cloud) ή ενημερώνει τοπικά.
+  function writeTableOrders(tableId, updater) {
+    setTables(prev => {
+      const next = prev.map(t => (t.id === tableId ? { ...t, orders: updater(t.orders) } : t));
+      if (useCloud) {
+        const tbl = next.find(t => t.id === tableId);
+        if (tbl) updateDoc(doc(db, TABLES, tableId), { orders: tbl.orders }).catch(() => {});
+      }
+      return next;
+    });
+  }
+
+  function addTable(name, extra = {}) {
+    const base = { name, orders: [], createdAt: new Date().toISOString(), zone: '', assignedTo: '', ...extra };
+    if (useCloud) {
+      addDoc(collection(db, TABLES), base).catch(() => {});
+      return null;
+    }
+    const id = Date.now().toString();
+    setTables(prev => [...prev, { id, ...base }]);
+    return id;
   }
 
   function removeTable(id) {
+    if (useCloud) { deleteDoc(doc(db, TABLES, id)).catch(() => {}); return; }
     setTables(prev => prev.filter(t => t.id !== id));
   }
 
   function clearTable(id) {
+    if (useCloud) {
+      updateDoc(doc(db, TABLES, id), { orders: [], createdAt: new Date().toISOString() }).catch(() => {});
+      return;
+    }
     setTables(prev => prev.map(t => t.id === id ? { ...t, orders: [], createdAt: new Date().toISOString() } : t));
   }
 
+  // Ανάθεση τραπεζιού σε σερβιτόρο / ζώνη (Φάση 2).
+  function assignTable(id, { assignedTo, zone }) {
+    const patch = {};
+    if (assignedTo !== undefined) patch.assignedTo = assignedTo;
+    if (zone !== undefined) patch.zone = zone;
+    if (useCloud) { updateDoc(doc(db, TABLES, id), patch).catch(() => {}); return; }
+    setTables(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
+  }
+
   function addItemToTable(tableId, item, categoryName) {
-    setTables(prev => prev.map(t => {
-      if (t.id !== tableId) return t;
-      const existing = t.orders.find(o => o.itemId === item.id);
+    writeTableOrders(tableId, orders => {
+      const existing = orders.find(o => o.itemId === item.id);
       if (existing) {
-        return { ...t, orders: t.orders.map(o => o.itemId === item.id ? { ...o, qty: o.qty + 1 } : o) };
+        return orders.map(o => o.itemId === item.id ? { ...o, qty: o.qty + 1 } : o);
       }
-      return { ...t, orders: [...t.orders, { itemId: item.id, name: item.name, price: item.price, qty: 1, category: categoryName }] };
-    }));
+      return [...orders, { itemId: item.id, name: item.name, price: item.price, qty: 1, category: categoryName }];
+    });
   }
 
   function removeItemFromTable(tableId, itemId) {
-    setTables(prev => prev.map(t => {
-      if (t.id !== tableId) return t;
-      const updated = t.orders.map(o => o.itemId === itemId ? { ...o, qty: o.qty - 1 } : o).filter(o => o.qty > 0);
-      return { ...t, orders: updated };
-    }));
+    writeTableOrders(tableId, orders =>
+      orders.map(o => o.itemId === itemId ? { ...o, qty: o.qty - 1 } : o).filter(o => o.qty > 0)
+    );
   }
 
   function incrementOrderItem(tableId, itemId) {
-    setTables(prev => prev.map(t => {
-      if (t.id !== tableId) return t;
-      return { ...t, orders: t.orders.map(o => o.itemId === itemId ? { ...o, qty: o.qty + 1 } : o) };
-    }));
+    writeTableOrders(tableId, orders =>
+      orders.map(o => o.itemId === itemId ? { ...o, qty: o.qty + 1 } : o)
+    );
   }
 
   function deleteOrderItem(tableId, itemId) {
-    setTables(prev => prev.map(t => {
-      if (t.id !== tableId) return t;
-      return { ...t, orders: t.orders.filter(o => o.itemId !== itemId) };
-    }));
+    writeTableOrders(tableId, orders => orders.filter(o => o.itemId !== itemId));
   }
 
   function getTableTotal(tableId) {
@@ -105,47 +185,77 @@ export function AppProvider({ children }) {
     const table = tables.find(t => t.id === tableId);
     const tableName = table ? table.name : '';
     const total = paidItems.reduce((sum, o) => sum + o.price * o.qty, 0);
+    const paidIds = paidItems.map(o => o.itemId);
 
     const sale = {
-      id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       tableName,
       items: paidItems.map(o => ({ name: o.name, price: o.price, qty: o.qty })),
       total,
       method, // 'cash' | 'card'
       given,
       change,
+      waiterName: table?.assignedTo || waiterName || '',
       paidAt: new Date().toISOString(),
     };
-    setHistory(prev => [sale, ...prev]);
 
-    const paidIds = paidItems.map(o => o.itemId);
-    setTables(prev => prev.map(t => {
-      if (t.id !== tableId) return t;
-      return { ...t, orders: t.orders.filter(o => !paidIds.includes(o.itemId)) };
-    }));
+    if (useCloud) {
+      addDoc(collection(db, SALES), sale).catch(() => {});
+    } else {
+      setHistory(prev => [{ id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, ...sale }, ...prev]);
+    }
+
+    writeTableOrders(tableId, orders => orders.filter(o => !paidIds.includes(o.itemId)));
     return sale;
   }
 
-  function clearHistory() {
+  async function clearHistory() {
+    if (useCloud) {
+      try {
+        const snap = await getDocs(collection(db, SALES));
+        const batch = writeBatch(db);
+        snap.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      } catch {}
+      return;
+    }
     setHistory([]);
   }
 
+  // ---- Κατάλογος (κοινός μέσω config/menu doc, ή τοπικά) ----
+  function persistMenu(nextCategories) {
+    if (useCloud) {
+      setDoc(doc(db, 'config', MENU_DOC_ID), { categories: nextCategories }).catch(() => {});
+    } else {
+      setMenu(nextCategories);
+    }
+  }
+
   function addMenuItem(categoryId, item) {
-    setMenu(prev => prev.map(cat => cat.id === categoryId ? { ...cat, items: [...cat.items, { ...item, id: `custom_${Date.now()}` }] } : cat));
+    const next = menu.map(cat => cat.id === categoryId
+      ? { ...cat, items: [...cat.items, { ...item, id: `custom_${Date.now()}` }] }
+      : cat);
+    persistMenu(next);
   }
 
   function updateMenuItemPrice(categoryId, itemId, newPrice) {
-    setMenu(prev => prev.map(cat => cat.id === categoryId ? { ...cat, items: cat.items.map(i => i.id === itemId ? { ...i, price: newPrice } : i) } : cat));
+    const next = menu.map(cat => cat.id === categoryId
+      ? { ...cat, items: cat.items.map(i => i.id === itemId ? { ...i, price: newPrice } : i) }
+      : cat);
+    persistMenu(next);
   }
 
   function deleteMenuItem(categoryId, itemId) {
-    setMenu(prev => prev.map(cat => cat.id === categoryId ? { ...cat, items: cat.items.filter(i => i.id !== itemId) } : cat));
+    const next = menu.map(cat => cat.id === categoryId
+      ? { ...cat, items: cat.items.filter(i => i.id !== itemId) }
+      : cat);
+    persistMenu(next);
   }
 
   return (
     <AppContext.Provider value={{
       tables, menu, history, role, setRole, loaded,
-      addTable, removeTable, clearTable,
+      waiterName, setWaiterName, cloudEnabled: useCloud,
+      addTable, removeTable, clearTable, assignTable,
       addItemToTable, removeItemFromTable, incrementOrderItem, deleteOrderItem,
       getTableTotal, payItems, clearHistory,
       addMenuItem, updateMenuItemPrice, deleteMenuItem,
