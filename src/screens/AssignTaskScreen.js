@@ -49,7 +49,7 @@ export default function AssignTaskScreen() {
         <TextInput
           style={s.input}
           placeholder="π.χ. Φέρε μενού στο 4"
-          placeholderTextColor="#666"
+          placeholderTextColor="#777"
           value={label}
           onChangeText={setLabel}
         />
@@ -58,7 +58,7 @@ export default function AssignTaskScreen() {
         <TextInput
           style={s.input}
           placeholder="Λεπτομέρειες..."
-          placeholderTextColor="#666"
+          placeholderTextColor="#777"
           value={note}
           onChangeText={setNote}
         />

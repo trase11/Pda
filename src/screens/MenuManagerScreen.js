@@ -2,9 +2,12 @@ import React, { useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, Modal, TextInput,
   StyleSheet, SafeAreaView, StatusBar, SectionList,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { confirmAction } from '../utils/confirm';
+
+const HIT_SLOP = { top: 10, bottom: 10, left: 10, right: 10 };
 
 export default function MenuManagerScreen() {
   const { menu, addMenuItem, updateMenuItemPrice, deleteMenuItem, setRole } = useApp();
@@ -72,22 +75,22 @@ export default function MenuManagerScreen() {
               <Text style={s.rowName}>{item.name}</Text>
               <Text style={s.rowPrice}>{item.price.toFixed(2)}€</Text>
             </View>
-            <TouchableOpacity style={s.editBtn} onPress={() => { setEditModal({ catId: section.catId, itemId: item.id, name: item.name }); setNewPrice(item.price.toString()); }}>
+            <TouchableOpacity style={s.editBtn} hitSlop={HIT_SLOP} onPress={() => { setEditModal({ catId: section.catId, itemId: item.id, name: item.name }); setNewPrice(item.price.toString()); }} accessibilityRole="button" accessibilityLabel={`Αλλαγή τιμής ${item.name}`}>
               <Text style={s.editBtnText}>✏️</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={s.deleteBtn} onPress={() => handleDelete(section.catId, item)}>
+            <TouchableOpacity style={s.deleteBtn} hitSlop={HIT_SLOP} onPress={() => handleDelete(section.catId, item)} accessibilityRole="button" accessibilityLabel={`Διαγραφή ${item.name}`}>
               <Text style={s.deleteBtnText}>🗑️</Text>
             </TouchableOpacity>
           </View>
         )}
       />
 
-      <TouchableOpacity style={s.fab} onPress={() => setAddModal(true)}>
+      <TouchableOpacity style={s.fab} onPress={() => setAddModal(true)} accessibilityRole="button" accessibilityLabel="Νέο προϊόν">
         <Text style={s.fabText}>+</Text>
       </TouchableOpacity>
 
       <Modal visible={addModal} transparent animationType="slide" onRequestClose={() => setAddModal(false)}>
-        <View style={s.overlay}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.overlay}>
           <View style={s.modal}>
             <Text style={s.modalTitle}>Νέο Προϊόν</Text>
             <Text style={s.label}>Κατηγορία</Text>
@@ -104,9 +107,9 @@ export default function MenuManagerScreen() {
               )}
             />
             <Text style={s.label}>Όνομα</Text>
-            <TextInput style={s.input} placeholder="Όνομα προϊόντος" placeholderTextColor="#666" value={newName} onChangeText={setNewName} />
+            <TextInput style={s.input} placeholder="Όνομα προϊόντος" placeholderTextColor="#777" value={newName} onChangeText={setNewName} />
             <Text style={s.label}>Τιμή (€)</Text>
-            <TextInput style={s.input} placeholder="0.00" placeholderTextColor="#666" value={newPrice} onChangeText={setNewPrice} keyboardType="decimal-pad" />
+            <TextInput style={s.input} placeholder="0.00" placeholderTextColor="#777" value={newPrice} onChangeText={setNewPrice} keyboardType="decimal-pad" returnKeyType="done" onSubmitEditing={handleAdd} />
             <View style={s.modalBtns}>
               <TouchableOpacity style={s.cancelBtn} onPress={() => { setAddModal(false); setNewName(''); setNewPrice(''); }}>
                 <Text style={s.cancelBtnText}>Άκυρο</Text>
@@ -116,15 +119,15 @@ export default function MenuManagerScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={!!editModal} transparent animationType="slide" onRequestClose={() => setEditModal(null)}>
-        <View style={s.overlay}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.overlay}>
           <View style={s.modal}>
             <Text style={s.modalTitle}>Αλλαγή τιμής</Text>
             <Text style={s.editItemName}>{editModal?.name}</Text>
-            <TextInput style={s.input} placeholder="Νέα τιμή" placeholderTextColor="#666" value={newPrice} onChangeText={setNewPrice} keyboardType="decimal-pad" autoFocus />
+            <TextInput style={s.input} placeholder="Νέα τιμή" placeholderTextColor="#777" value={newPrice} onChangeText={setNewPrice} keyboardType="decimal-pad" autoFocus returnKeyType="done" onSubmitEditing={handleEditPrice} />
             <View style={s.modalBtns}>
               <TouchableOpacity style={s.cancelBtn} onPress={() => { setEditModal(null); setNewPrice(''); }}>
                 <Text style={s.cancelBtnText}>Άκυρο</Text>
@@ -134,7 +137,7 @@ export default function MenuManagerScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

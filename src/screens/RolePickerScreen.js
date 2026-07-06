@@ -26,9 +26,11 @@ export default function RolePickerScreen() {
           <TextInput
             style={s.nameInput}
             placeholder="π.χ. Νίκος"
-            placeholderTextColor="#666"
+            placeholderTextColor="#777"
             value={name}
             onChangeText={setName}
+            returnKeyType="done"
+            onSubmitEditing={pickWaiter}
           />
         </View>
 

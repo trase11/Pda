@@ -15,16 +15,20 @@ export default function RunnerScreen() {
   const { setRole } = useApp();
 
   // Ήχος όταν εμφανίζεται ΝΕΟ έτοιμο φαγητό ή ΝΕΑ δουλειά.
-  const prevReady = useRef(0);
-  const prevTasks = useRef(0);
+  // Συγκρίνουμε IDs, όχι πλήθος: αν στο ίδιο snapshot ένα σερβιριστεί κι ένα
+  // νέο γίνει έτοιμο, το πλήθος μένει ίδιο αλλά υπάρχει νέα ειδοποίηση.
+  const prevReadyIds = useRef(null);
+  const prevTaskIds = useRef(null);
   useEffect(() => {
-    if (readyOrders.length > prevReady.current) beep();
-    prevReady.current = readyOrders.length;
-  }, [readyOrders.length]);
+    const ids = new Set(readyOrders.map(o => o.id));
+    if (prevReadyIds.current && readyOrders.some(o => !prevReadyIds.current.has(o.id))) beep();
+    prevReadyIds.current = ids;
+  }, [readyOrders]);
   useEffect(() => {
-    if (pendingTasks.length > prevTasks.current) beep();
-    prevTasks.current = pendingTasks.length;
-  }, [pendingTasks.length]);
+    const ids = new Set(pendingTasks.map(t => t.id));
+    if (prevTaskIds.current && pendingTasks.some(t => !prevTaskIds.current.has(t.id))) beep();
+    prevTaskIds.current = ids;
+  }, [pendingTasks]);
 
   function handleChangeRole() {
     confirmAction('Αλλαγή ρόλου', 'Να επιστρέψεις στην επιλογή ρόλου;', () => setRole(null), 'Αλλαγή');
@@ -93,9 +97,12 @@ export default function RunnerScreen() {
                     <Text style={s.cardTable}>{o.tableName}</Text>
                     <View style={s.cardItems}>
                       {o.items.map((it, idx) => (
-                        <Text key={idx} style={s.cardItemText}>
-                          <Text style={s.cardQty}>{it.qty}× </Text>{it.name}
-                        </Text>
+                        <View key={idx}>
+                          <Text style={s.cardItemText}>
+                            <Text style={s.cardQty}>{it.qty}× </Text>{it.name}
+                          </Text>
+                          {!!it.note && <Text style={s.cardItemNote}>📝 {it.note}</Text>}
+                        </View>
                       ))}
                     </View>
                     <Text style={s.cardTime}>Έτοιμο {formatTime(o.readyAt)}</Text>
@@ -147,6 +154,7 @@ const s = StyleSheet.create({
   cardTable: { fontSize: 20, fontWeight: '800', color: '#fff' },
   cardItems: { gap: 2, marginTop: 2 },
   cardItemText: { fontSize: 16, color: '#eee' },
+  cardItemNote: { fontSize: 13, color: '#e6a23c', fontStyle: 'italic', marginLeft: 22 },
   cardQty: { fontWeight: '800', color: '#4ecca3' },
   cardTime: { fontSize: 12, color: '#888', marginTop: 4 },
   taskLabel: { fontSize: 19, fontWeight: '800', color: '#fff' },

@@ -26,12 +26,15 @@ export function KitchenProvider({ children }) {
     return unsub;
   }, []);
 
-  // Ο σερβιτόρος στέλνει τα φαγητά ενός τραπεζιού στην κουζίνα.
-  async function sendToKitchen(tableName, items) {
+  // Ο σερβιτόρος στέλνει φαγητά στην κουζίνα. Τα items έρχονται ήδη ως
+  // «δέλτα» (μόνο ό,τι ΔΕΝ έχει ξανασταλεί) από το TableDetailScreen,
+  // ώστε δεύτερη αποστολή να μην ξαναμαγειρεύει τα ίδια πιάτα.
+  async function sendToKitchen(tableName, items, tableId = '') {
     if (!firebaseEnabled || !db) return;
     await addDoc(collection(db, ORDERS), {
+      tableId,
       tableName,
-      items: items.map(i => ({ name: i.name, qty: i.qty })),
+      items: items.map(i => ({ name: i.name, qty: i.qty, note: i.note || '' })),
       status: 'pending',
       createdAt: serverTimestamp(),
     });

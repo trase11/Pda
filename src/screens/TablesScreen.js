@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, Modal, TextInput,
-  StyleSheet, SafeAreaView, StatusBar,
+  StyleSheet, SafeAreaView, StatusBar, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { confirmAction } from '../utils/confirm';
+
+const HIT_SLOP = { top: 10, bottom: 10, left: 10, right: 10 };
 
 export default function TablesScreen({ navigation }) {
   const { tables, addTable, removeTable, getTableTotal, assignTable, waiterName } = useApp();
@@ -15,6 +17,7 @@ export default function TablesScreen({ navigation }) {
   const [assignTarget, setAssignTarget] = useState(null); // table being (re)assigned
   const [assignName, setAssignName] = useState('');
   const [assignZone, setAssignZone] = useState('');
+  const zoneInputRef = useRef(null);
 
   const visibleTables = filter === 'mine'
     ? tables.filter(t => (t.assignedTo || '') === waiterName)
@@ -96,13 +99,13 @@ export default function TablesScreen({ navigation }) {
                   </View>
                   <Text style={s.cardTime}>Από {formatTime(item.createdAt)}</Text>
                   <Text style={s.cardItems}>{itemCount > 0 ? `${itemCount} αντικείμενα` : 'Κενή παραγγελία'}</Text>
-                  <TouchableOpacity style={s.assignChip} onPress={() => openAssign(item)}>
+                  <TouchableOpacity style={s.assignChip} onPress={() => openAssign(item)} hitSlop={HIT_SLOP} accessibilityRole="button" accessibilityLabel={`Ανάθεση τραπεζιού ${item.name}`}>
                     <Text style={s.assignChipText}>👤 {item.assignedTo || 'Χωρίς σερβιτόρο'}  ✎</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={s.cardRight}>
                   <Text style={s.cardTotal}>{total.toFixed(2)}€</Text>
-                  <TouchableOpacity style={s.deleteBtn} onPress={() => handleDelete(item)}>
+                  <TouchableOpacity style={s.deleteBtn} onPress={() => handleDelete(item)} hitSlop={HIT_SLOP} accessibilityRole="button" accessibilityLabel={`Κλείσιμο τραπεζιού ${item.name}`}>
                     <Text style={s.deleteBtnText}>✕</Text>
                   </TouchableOpacity>
                 </View>
@@ -112,46 +115,51 @@ export default function TablesScreen({ navigation }) {
         />
       )}
 
-      <TouchableOpacity style={s.fab} onPress={() => setModalVisible(true)}>
+      <TouchableOpacity style={s.fab} onPress={() => setModalVisible(true)} accessibilityRole="button" accessibilityLabel="Νέο τραπέζι">
         <Text style={s.fabText}>+</Text>
       </TouchableOpacity>
 
       {/* Νέο τραπέζι */}
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
-        <View style={s.overlay}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.overlay}>
           <View style={s.modal}>
             <Text style={s.modalTitle}>Νέο Τραπέζι</Text>
             <TextInput
               style={s.input}
               placeholder="Όνομα π.χ. Τραπέζι 1, Μπαρ..."
-              placeholderTextColor="#666"
+              placeholderTextColor="#777"
               value={tableName}
               onChangeText={setTableName}
               autoFocus
-              onSubmitEditing={handleAdd}
+              returnKeyType="next"
+              blurOnSubmit={false}
+              onSubmitEditing={() => zoneInputRef.current?.focus()}
             />
             <TextInput
+              ref={zoneInputRef}
               style={s.input}
               placeholder="Ζώνη/πόστο (προαιρετικό) π.χ. Βεράντα"
-              placeholderTextColor="#666"
+              placeholderTextColor="#777"
               value={tableZone}
               onChangeText={setTableZone}
+              returnKeyType="done"
+              onSubmitEditing={handleAdd}
             />
             <View style={s.modalBtns}>
               <TouchableOpacity style={s.cancelBtn} onPress={() => { setModalVisible(false); setTableName(''); setTableZone(''); }}>
                 <Text style={s.cancelBtnText}>Άκυρο</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[s.confirmBtn, !tableName.trim() && s.disabled]} onPress={handleAdd}>
+              <TouchableOpacity style={[s.confirmBtn, !tableName.trim() && s.disabled]} onPress={handleAdd} disabled={!tableName.trim()}>
                 <Text style={s.confirmBtnText}>Άνοιγμα</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Ανάθεση τραπεζιού */}
       <Modal visible={!!assignTarget} transparent animationType="slide" onRequestClose={() => setAssignTarget(null)}>
-        <View style={s.overlay}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.overlay}>
           <View style={s.modal}>
             <Text style={s.modalTitle}>Ανάθεση — {assignTarget?.name}</Text>
             <Text style={s.assignLabel}>Σερβιτόρος</Text>
@@ -187,7 +195,7 @@ export default function TablesScreen({ navigation }) {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -207,7 +215,7 @@ const s = StyleSheet.create({
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 20 },
   emptyIcon: { fontSize: 60 },
   emptyText: { fontSize: 18, color: '#aaa', fontWeight: '600', textAlign: 'center' },
-  emptyHint: { fontSize: 14, color: '#666' },
+  emptyHint: { fontSize: 14, color: '#8a8a9a' },
   list: { padding: 16, gap: 12 },
   card: {
     backgroundColor: '#16213e', borderRadius: 16, padding: 20,
@@ -220,10 +228,10 @@ const s = StyleSheet.create({
   zoneBadge: { fontSize: 11, color: '#6ea8fe', backgroundColor: '#1a2f4e', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden', fontWeight: '700' },
   cardTime: { fontSize: 13, color: '#888', marginTop: 4 },
   cardItems: { fontSize: 13, color: '#4ecca3', marginTop: 2 },
-  assignChip: { marginTop: 6, alignSelf: 'flex-start' },
+  assignChip: { marginTop: 6, alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 8, marginLeft: -8 },
   assignChipText: { fontSize: 12, color: '#aaa' },
   cardRight: { alignItems: 'flex-end', gap: 10 },
-  cardTotal: { fontSize: 24, fontWeight: '800', color: '#4ecca3' },
+  cardTotal: { fontSize: 24, fontWeight: '800', color: '#4ecca3', fontVariant: ['tabular-nums'] },
   deleteBtn: { backgroundColor: '#3d1a1a', borderRadius: 8, padding: 6, paddingHorizontal: 10 },
   deleteBtnText: { color: '#e74c3c', fontSize: 14, fontWeight: '700' },
   fab: {

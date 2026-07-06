@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, TextInput,
   StyleSheet, SafeAreaView, StatusBar, SectionList,
@@ -13,9 +13,20 @@ export default function AddItemsScreen({ route, navigation }) {
 
   const table = tables.find(t => t.id === tableId);
 
+  // Αν το τραπέζι κλείσει από άλλη συσκευή, βγαίνουμε — αλλιώς ο σερβιτόρος
+  // θα «πρόσθετε» είδη σε ανύπαρκτο τραπέζι χωρίς κανένα μήνυμα.
+  useEffect(() => {
+    if (!table) navigation.goBack();
+  }, [table, navigation]);
+
+  if (!table) return null;
+
+  // Άθροισμα σε ΟΛΕΣ τις γραμμές του προϊόντος (μπορεί να υπάρχουν
+  // ξεχωριστές γραμμές με διαφορετικές σημειώσεις).
   function getOrderQty(itemId) {
-    const order = table?.orders.find(o => o.itemId === itemId);
-    return order ? order.qty : 0;
+    return table.orders
+      .filter(o => o.itemId === itemId)
+      .reduce((sum, o) => sum + o.qty, 0);
   }
 
   const filteredMenu = menu.map(cat => ({
@@ -40,7 +51,7 @@ export default function AddItemsScreen({ route, navigation }) {
       <TextInput
         style={s.searchInput}
         placeholder="Αναζήτηση..."
-        placeholderTextColor="#666"
+        placeholderTextColor="#777"
         value={search}
         onChangeText={setSearch}
       />
@@ -88,6 +99,8 @@ export default function AddItemsScreen({ route, navigation }) {
                 <TouchableOpacity
                   style={s.addBtn}
                   onPress={() => addItemToTable(tableId, item, catObj?.name ?? '')}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Προσθήκη ${item.name}`}
                 >
                   <Text style={s.addBtnText}>+</Text>
                 </TouchableOpacity>
@@ -133,7 +146,7 @@ const s = StyleSheet.create({
   itemPrice: { fontSize: 13, color: '#888', marginTop: 2 },
   addRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   qtyBadge: { backgroundColor: '#1a3a2e', borderRadius: 10, minWidth: 24, height: 24, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
-  qtyBadgeText: { color: '#4ecca3', fontSize: 13, fontWeight: '700' },
-  addBtn: { backgroundColor: '#4ecca3', borderRadius: 10, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  addBtnText: { color: '#1a1a2e', fontSize: 22, fontWeight: '700', marginTop: -2 },
+  qtyBadgeText: { color: '#4ecca3', fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  addBtn: { backgroundColor: '#4ecca3', borderRadius: 12, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  addBtnText: { color: '#1a1a2e', fontSize: 24, fontWeight: '700', marginTop: -2 },
 });
