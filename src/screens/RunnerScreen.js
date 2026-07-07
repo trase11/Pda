@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
   StyleSheet, SafeAreaView, StatusBar,
@@ -7,26 +7,49 @@ import { useKitchen } from '../context/KitchenContext';
 import { useTasks } from '../context/TasksContext';
 import { useApp } from '../context/AppContext';
 import { confirmAction } from '../utils/confirm';
-import { beep } from '../utils/notify';
+import { beep, notify, unlockAudio, requestNotifyPermission, isAudioUnlocked } from '../utils/notify';
 
 export default function RunnerScreen() {
   const { firebaseEnabled, readyOrders, markServed } = useKitchen();
   const { pendingTasks, completeTask } = useTasks();
   const { setRole } = useApp();
 
-  // Ήχος όταν εμφανίζεται ΝΕΟ έτοιμο φαγητό ή ΝΕΑ δουλειά.
+  // Στο web ο ήχος είναι «κλειδωμένος» μέχρι ο βοηθός να πατήσει το κουμπί
+  // ενεργοποίησης (βλ. notify.js). Σε native είναι πάντα έτοιμος.
+  const [alertsReady, setAlertsReady] = useState(() => isAudioUnlocked());
+
+  async function enableAlerts() {
+    await unlockAudio();
+    await requestNotifyPermission();
+    beep(); // δοκιμαστικός ήχος για επιβεβαίωση
+    setAlertsReady(isAudioUnlocked());
+  }
+
+  // Ήχος + οπτική ειδοποίηση όταν εμφανίζεται ΝΕΟ έτοιμο φαγητό ή ΝΕΑ δουλειά.
   // Συγκρίνουμε IDs, όχι πλήθος: αν στο ίδιο snapshot ένα σερβιριστεί κι ένα
   // νέο γίνει έτοιμο, το πλήθος μένει ίδιο αλλά υπάρχει νέα ειδοποίηση.
   const prevReadyIds = useRef(null);
   const prevTaskIds = useRef(null);
   useEffect(() => {
     const ids = new Set(readyOrders.map(o => o.id));
-    if (prevReadyIds.current && readyOrders.some(o => !prevReadyIds.current.has(o.id))) beep();
+    if (prevReadyIds.current) {
+      const fresh = readyOrders.filter(o => !prevReadyIds.current.has(o.id));
+      if (fresh.length) {
+        beep();
+        notify('🔔 Έτοιμο πιάτο', fresh.map(o => o.tableName).join(', '));
+      }
+    }
     prevReadyIds.current = ids;
   }, [readyOrders]);
   useEffect(() => {
     const ids = new Set(pendingTasks.map(t => t.id));
-    if (prevTaskIds.current && pendingTasks.some(t => !prevTaskIds.current.has(t.id))) beep();
+    if (prevTaskIds.current) {
+      const fresh = pendingTasks.filter(t => !prevTaskIds.current.has(t.id));
+      if (fresh.length) {
+        beep();
+        notify('🧹 Νέα δουλειά', fresh.map(t => t.label).join(', '));
+      }
+    }
     prevTaskIds.current = ids;
   }, [pendingTasks]);
 
@@ -76,6 +99,16 @@ export default function RunnerScreen() {
           <Text style={s.roleBtnText}>Αλλαγή ρόλου</Text>
         </TouchableOpacity>
       </View>
+
+      {!alertsReady && (
+        <TouchableOpacity style={s.enableBar} onPress={enableAlerts} accessibilityRole="button" accessibilityLabel="Ενεργοποίηση ειδοποιήσεων">
+          <Text style={s.enableIcon}>🔔</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.enableTitle}>Πάτα για ενεργοποίηση ήχου</Text>
+            <Text style={s.enableSub}>Μία φορά στην αρχή της βάρδιας — αλλιώς δεν θα ακούς ειδοποιήσεις</Text>
+          </View>
+        </TouchableOpacity>
+      )}
 
       {readyOrders.length === 0 && pendingTasks.length === 0 ? (
         <View style={s.empty}>
@@ -140,6 +173,10 @@ const s = StyleSheet.create({
   headerSub: { fontSize: 14, color: '#888', marginTop: 2 },
   roleBtn: { backgroundColor: '#2d2d4e', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
   roleBtnText: { color: '#aaa', fontSize: 13, fontWeight: '600' },
+  enableBar: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#1a3a2e', borderColor: '#4ecca3', borderWidth: 1, borderRadius: 12, padding: 14, margin: 16, marginBottom: 0 },
+  enableIcon: { fontSize: 26 },
+  enableTitle: { color: '#4ecca3', fontSize: 16, fontWeight: '800' },
+  enableSub: { color: '#9fdcc6', fontSize: 12, marginTop: 2 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 30 },
   emptyIcon: { fontSize: 60 },
   emptyText: { fontSize: 18, color: '#aaa', fontWeight: '600' },
