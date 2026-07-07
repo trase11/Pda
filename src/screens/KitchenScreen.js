@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
   StyleSheet, SafeAreaView, StatusBar,
@@ -6,6 +6,8 @@ import {
 import { useKitchen } from '../context/KitchenContext';
 import { useApp } from '../context/AppContext';
 import { confirmAction } from '../utils/confirm';
+import { beep, notify } from '../utils/notify';
+import ShiftBar from '../components/ShiftBar';
 
 // Πόσα λεπτά αναμονής θεωρούνται «προσοχή» και «άργησε».
 const WARN_MIN = 10;
@@ -13,7 +15,7 @@ const LATE_MIN = 20;
 
 export default function KitchenScreen() {
   const { firebaseEnabled, pendingOrders, markReady } = useKitchen();
-  const { setRole } = useApp();
+  const { setRole, onDuty } = useApp();
 
   // Τικ κάθε 30" ώστε ο χρόνος αναμονής των δελτίων να ανανεώνεται.
   const [now, setNow] = useState(Date.now());
@@ -21,6 +23,23 @@ export default function KitchenScreen() {
     const t = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(t);
   }, []);
+
+  // Ήχος + δόνηση + ειδοποίηση όταν φτάνει ΝΕΟ δελτίο από σερβιτόρο — μόνο
+  // «σε βάρδια». Σύγκριση IDs, όχι πλήθους (βλ. RunnerScreen). Τα prev IDs
+  // ενημερώνονται ΚΑΙ εκτός βάρδιας, ώστε η έναρξη βάρδιας να μη σκάσει
+  // σωρευμένες ειδοποιήσεις για δελτία που ήδη φαίνονται στην οθόνη.
+  const prevPendingIds = useRef(null);
+  useEffect(() => {
+    const ids = new Set(pendingOrders.map(o => o.id));
+    if (prevPendingIds.current && onDuty) {
+      const fresh = pendingOrders.filter(o => !prevPendingIds.current.has(o.id));
+      if (fresh.length) {
+        beep();
+        notify('🍳 Νέο δελτίο', fresh.map(o => o.tableName).join(', '));
+      }
+    }
+    prevPendingIds.current = ids;
+  }, [pendingOrders, onDuty]);
 
   function handleChangeRole() {
     confirmAction('Αλλαγή ρόλου', 'Να επιστρέψεις στην επιλογή ρόλου;', () => setRole(null), 'Αλλαγή');
@@ -73,6 +92,8 @@ export default function KitchenScreen() {
           <Text style={s.roleBtnText}>Αλλαγή ρόλου</Text>
         </TouchableOpacity>
       </View>
+
+      <ShiftBar hint="Μία φορά όταν ξεκινάς — αλλιώς δεν θα χτυπάει ήχος στα νέα δελτία." />
 
       {pendingOrders.length === 0 ? (
         <View style={s.empty}>

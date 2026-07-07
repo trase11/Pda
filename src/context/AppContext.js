@@ -6,8 +6,12 @@ import {
 } from 'firebase/firestore';
 import { db, firebaseEnabled } from '../firebase';
 import { MENU } from '../data/menuData';
+import { unlockAudio, requestNotifyPermission, beep } from '../utils/notify';
 
 const AppContext = createContext();
+
+// Ασφάλεια βάρδιας: συσκευή που ξεχάστηκε «σε βάρδια» βγαίνει μόνη της.
+const SHIFT_MAX_MS = 12 * 60 * 60 * 1000;
 
 // Όταν υπάρχει Firebase, όλα (τραπέζια, ιστορικό, κατάλογος) είναι κοινά
 // σε πραγματικό χρόνο μεταξύ συσκευών. Αλλιώς, πέφτουμε σε τοπική
@@ -55,6 +59,14 @@ export function AppProvider({ children }) {
   const [role, setRoleState] = useState(null); // null | 'waiter' | 'kitchen' | 'runner'
   const [waiterName, setWaiterNameState] = useState('');
   const [loaded, setLoaded] = useState(false);
+
+  // «Σε βάρδια»: ήχος/δόνηση/notification παίζουν ΜΟΝΟ σε συσκευές σε βάρδια.
+  // ΣΚΟΠΙΜΑ δεν αποθηκεύεται (ούτε AsyncStorage): refresh ή νέο άνοιγμα
+  // ξεκινά εκτός βάρδιας, ώστε όποιος έχει απλώς ανοιχτή την εφαρμογή στο
+  // κινητό του (εκτός δουλειάς) να μην ενοχλείται. Στο web ο ήχος απαιτεί
+  // έτσι κι αλλιώς ένα tap για ξεκλείδωμα — το tap «Έναρξη βάρδιας» τα κάνει
+  // όλα μαζί (ξεκλείδωμα ήχου + άδεια notifications + δήλωση βάρδιας).
+  const [onDuty, setOnDuty] = useState(false);
 
   // ---- Φόρτωση ρόλου/ονόματος (πάντα ανά συσκευή) ----
   useEffect(() => {
@@ -121,6 +133,28 @@ export function AppProvider({ children }) {
     AsyncStorage.setItem('menu', JSON.stringify(menu)).catch(() => {});
     AsyncStorage.setItem('history', JSON.stringify(history)).catch(() => {});
   }, [tables, menu, history, loaded]);
+
+  // Αυτόματο τέλος βάρδιας μετά από SHIFT_MAX_MS — καρτέλα που έμεινε
+  // ανοιχτή από την προηγούμενη μέρα δεν θα χτυπάει στο σπίτι.
+  useEffect(() => {
+    if (!onDuty) return;
+    const t = setTimeout(() => setOnDuty(false), SHIFT_MAX_MS);
+    return () => clearTimeout(t);
+  }, [onDuty]);
+
+  // Έναρξη βάρδιας — να καλείται ΜΕΣΑ από tap του χρήστη (το web απαιτεί
+  // user gesture για το ξεκλείδωμα ήχου). Το μπιπ στο τέλος είναι η
+  // επιβεβαίωση προς τον υπάλληλο ότι ο ήχος όντως ακούγεται.
+  async function startShift() {
+    await unlockAudio();
+    await requestNotifyPermission();
+    setOnDuty(true);
+    beep();
+  }
+
+  function endShift() {
+    setOnDuty(false);
+  }
 
   function setRole(r) {
     setRoleState(r);
@@ -322,6 +356,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       tables, menu, history, role, setRole, loaded,
       waiterName, setWaiterName, cloudEnabled: useCloud,
+      onDuty, startShift, endShift,
       addTable, removeTable, clearTable, assignTable,
       addItemToTable, removeItemFromTable, incrementOrderItem, deleteOrderItem,
       setOrderNote, markOrdersSent,

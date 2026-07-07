@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
   StyleSheet, SafeAreaView, StatusBar,
@@ -7,32 +7,24 @@ import { useKitchen } from '../context/KitchenContext';
 import { useTasks } from '../context/TasksContext';
 import { useApp } from '../context/AppContext';
 import { confirmAction } from '../utils/confirm';
-import { beep, notify, unlockAudio, requestNotifyPermission, isAudioUnlocked } from '../utils/notify';
+import { beep, notify } from '../utils/notify';
+import ShiftBar from '../components/ShiftBar';
 
 export default function RunnerScreen() {
   const { firebaseEnabled, readyOrders, markServed } = useKitchen();
   const { pendingTasks, completeTask } = useTasks();
-  const { setRole } = useApp();
+  const { setRole, onDuty } = useApp();
 
-  // Στο web ο ήχος είναι «κλειδωμένος» μέχρι ο βοηθός να πατήσει το κουμπί
-  // ενεργοποίησης (βλ. notify.js). Σε native είναι πάντα έτοιμος.
-  const [alertsReady, setAlertsReady] = useState(() => isAudioUnlocked());
-
-  async function enableAlerts() {
-    await unlockAudio();
-    await requestNotifyPermission();
-    beep(); // δοκιμαστικός ήχος για επιβεβαίωση
-    setAlertsReady(isAudioUnlocked());
-  }
-
-  // Ήχος + οπτική ειδοποίηση όταν εμφανίζεται ΝΕΟ έτοιμο φαγητό ή ΝΕΑ δουλειά.
-  // Συγκρίνουμε IDs, όχι πλήθος: αν στο ίδιο snapshot ένα σερβιριστεί κι ένα
-  // νέο γίνει έτοιμο, το πλήθος μένει ίδιο αλλά υπάρχει νέα ειδοποίηση.
+  // Ήχος + οπτική ειδοποίηση όταν εμφανίζεται ΝΕΟ έτοιμο φαγητό ή ΝΕΑ δουλειά
+  // — μόνο «σε βάρδια» (βλ. ShiftBar/AppContext). Συγκρίνουμε IDs, όχι πλήθος:
+  // αν στο ίδιο snapshot ένα σερβιριστεί κι ένα νέο γίνει έτοιμο, το πλήθος
+  // μένει ίδιο αλλά υπάρχει νέα ειδοποίηση. Τα prev IDs ενημερώνονται ΚΑΙ
+  // εκτός βάρδιας, ώστε η έναρξη βάρδιας να μη σκάσει σωρευμένες ειδοποιήσεις.
   const prevReadyIds = useRef(null);
   const prevTaskIds = useRef(null);
   useEffect(() => {
     const ids = new Set(readyOrders.map(o => o.id));
-    if (prevReadyIds.current) {
+    if (prevReadyIds.current && onDuty) {
       const fresh = readyOrders.filter(o => !prevReadyIds.current.has(o.id));
       if (fresh.length) {
         beep();
@@ -40,10 +32,10 @@ export default function RunnerScreen() {
       }
     }
     prevReadyIds.current = ids;
-  }, [readyOrders]);
+  }, [readyOrders, onDuty]);
   useEffect(() => {
     const ids = new Set(pendingTasks.map(t => t.id));
-    if (prevTaskIds.current) {
+    if (prevTaskIds.current && onDuty) {
       const fresh = pendingTasks.filter(t => !prevTaskIds.current.has(t.id));
       if (fresh.length) {
         beep();
@@ -51,7 +43,7 @@ export default function RunnerScreen() {
       }
     }
     prevTaskIds.current = ids;
-  }, [pendingTasks]);
+  }, [pendingTasks, onDuty]);
 
   function handleChangeRole() {
     confirmAction('Αλλαγή ρόλου', 'Να επιστρέψεις στην επιλογή ρόλου;', () => setRole(null), 'Αλλαγή');
@@ -100,15 +92,7 @@ export default function RunnerScreen() {
         </TouchableOpacity>
       </View>
 
-      {!alertsReady && (
-        <TouchableOpacity style={s.enableBar} onPress={enableAlerts} accessibilityRole="button" accessibilityLabel="Ενεργοποίηση ειδοποιήσεων">
-          <Text style={s.enableIcon}>🔔</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={s.enableTitle}>Πάτα για ενεργοποίηση ήχου</Text>
-            <Text style={s.enableSub}>Μία φορά στην αρχή της βάρδιας — αλλιώς δεν θα ακούς ειδοποιήσεις</Text>
-          </View>
-        </TouchableOpacity>
-      )}
+      <ShiftBar hint="Μία φορά όταν ξεκινάς — αλλιώς δεν θα ακούς έτοιμα πιάτα και δουλειές." />
 
       {readyOrders.length === 0 && pendingTasks.length === 0 ? (
         <View style={s.empty}>
@@ -173,10 +157,6 @@ const s = StyleSheet.create({
   headerSub: { fontSize: 14, color: '#888', marginTop: 2 },
   roleBtn: { backgroundColor: '#2d2d4e', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
   roleBtnText: { color: '#aaa', fontSize: 13, fontWeight: '600' },
-  enableBar: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#1a3a2e', borderColor: '#4ecca3', borderWidth: 1, borderRadius: 12, padding: 14, margin: 16, marginBottom: 0 },
-  enableIcon: { fontSize: 26 },
-  enableTitle: { color: '#4ecca3', fontSize: 16, fontWeight: '800' },
-  enableSub: { color: '#9fdcc6', fontSize: 12, marginTop: 2 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 30 },
   emptyIcon: { fontSize: 60 },
   emptyText: { fontSize: 18, color: '#aaa', fontWeight: '600' },
