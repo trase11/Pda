@@ -6,14 +6,14 @@ import {
 import { useApp } from '../context/AppContext';
 import { useKitchen } from '../context/KitchenContext';
 import { confirmAction } from '../utils/confirm';
-
-const HIT_SLOP = { top: 10, bottom: 10, left: 10, right: 10 };
+import { C, HIT_SLOP } from '../theme';
 
 export default function TableDetailScreen({ route, navigation }) {
   const { tableId } = route.params;
   const {
     tables, removeItemFromTable, incrementOrderItem, deleteOrderItem,
-    setOrderNote, markOrdersSent, clearTable, getTableTotal, payItems,
+    setOrderNote, setTableOrderNote, markOrdersSent, clearTable,
+    getTableTotal, payItems, transferOrders,
   } = useApp();
   const { firebaseEnabled, sendToKitchen } = useKitchen();
   const table = tables.find(t => t.id === tableId);
@@ -23,6 +23,9 @@ export default function TableDetailScreen({ route, navigation }) {
   const [selected, setSelected] = useState({}); // lineId -> bool
   const [noteTarget, setNoteTarget] = useState(null); // γραμμή που επεξεργαζόμαστε
   const [noteText, setNoteText] = useState('');
+  const [orderNoteModal, setOrderNoteModal] = useState(false); // σημείωση όλης της παραγγελίας
+  const [orderNoteText, setOrderNoteText] = useState('');
+  const [transferModal, setTransferModal] = useState(false);
   const [justSent, setJustSent] = useState(false);
   const payingRef = useRef(false); // φραγή διπλού tap στην πληρωμή
 
@@ -36,10 +39,12 @@ export default function TableDetailScreen({ route, navigation }) {
   if (!table) return null;
 
   const total = getTableTotal(tableId);
+  const orderNote = table.orderNote || '';
   const foodItems = table.orders.filter(o => o.category === 'Φαγητά');
   // Μόνο ό,τι ΔΕΝ έχει σταλεί ακόμα στην κουζίνα (delta).
   const unsentFood = foodItems.filter(o => o.qty - o.sentQty > 0);
   const unsentCount = unsentFood.reduce((sum, o) => sum + (o.qty - o.sentQty), 0);
+  const otherTables = tables.filter(t => t.id !== tableId);
 
   const selectedItems = table.orders.filter(o => selected[o.lineId]);
   const selectedTotal = selectedItems.reduce((sum, o) => sum + o.price * o.qty, 0);
@@ -85,12 +90,20 @@ export default function TableDetailScreen({ route, navigation }) {
 
   // Συχνή, μη καταστροφική ενέργεια: χωρίς dialog επιβεβαίωσης — στέλνει
   // αμέσως ΜΟΝΟ τα νέα τεμάχια και δείχνει σύντομη ένδειξη επιτυχίας.
+  // Η σημείωση παραγγελίας πάει με το δελτίο και μετά καθαρίζεται —
+  // αφορούσε τη συγκεκριμένη αποστολή.
   function handleSendToKitchen() {
     if (unsentFood.length === 0) return;
-    const items = unsentFood.map(o => ({ name: o.name, qty: o.qty - o.sentQty, note: o.note }));
-    sendToKitchen(table.name, items, tableId)
+    const items = unsentFood.map(o => ({
+      name: o.name,
+      qty: o.qty - o.sentQty,
+      note: o.note,
+      options: (o.options || []).map(x => x.name),
+    }));
+    sendToKitchen(table.name, items, tableId, orderNote)
       .catch(err => console.warn('Αποτυχία αποστολής στην κουζίνα:', err));
     markOrdersSent(tableId, unsentFood.map(o => o.lineId));
+    if (orderNote) setTableOrderNote(tableId, '');
     setJustSent(true);
     setTimeout(() => setJustSent(false), 2000);
   }
@@ -101,6 +114,16 @@ export default function TableDetailScreen({ route, navigation }) {
       'Να διαγραφεί η παραγγελία;',
       () => { clearTable(tableId); setShowBill(false); setPaid(''); },
       'Εκκαθάριση'
+    );
+  }
+
+  function handleTransfer(target) {
+    setTransferModal(false);
+    confirmAction(
+      'Μεταφορά παραγγελίας',
+      `Να μεταφερθούν όλα τα είδη στο «${target.name}»;`,
+      () => transferOrders(tableId, target.id),
+      'Μεταφορά'
     );
   }
 
@@ -116,18 +139,35 @@ export default function TableDetailScreen({ route, navigation }) {
     setNoteText('');
   }
 
+  function openOrderNote() {
+    setOrderNoteText(orderNote);
+    setOrderNoteModal(true);
+  }
+
+  function saveOrderNote() {
+    setTableOrderNote(tableId, orderNoteText.trim());
+    setOrderNoteModal(false);
+  }
+
   return (
     <SafeAreaView style={s.safe}>
-      <StatusBar barStyle="light-content" backgroundColor="#1a1a2e" />
+      <StatusBar barStyle="light-content" backgroundColor={C.bg} />
 
       <View style={s.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn} hitSlop={HIT_SLOP} accessibilityRole="button" accessibilityLabel="Πίσω">
           <Text style={s.backText}>← Πίσω</Text>
         </TouchableOpacity>
         <Text style={s.headerTitle}>{table.name}</Text>
-        <TouchableOpacity onPress={handleClear} style={s.clearBtn} hitSlop={HIT_SLOP} accessibilityRole="button" accessibilityLabel="Εκκαθάριση παραγγελίας">
-          <Text style={s.clearText}>Εκκαθάριση</Text>
-        </TouchableOpacity>
+        <View style={s.headerActions}>
+          {table.orders.length > 0 && otherTables.length > 0 && (
+            <TouchableOpacity onPress={() => setTransferModal(true)} style={s.transferBtn} hitSlop={HIT_SLOP} accessibilityRole="button" accessibilityLabel="Μεταφορά σε άλλο τραπέζι">
+              <Text style={s.transferText}>⇄</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={handleClear} style={s.clearBtn} hitSlop={HIT_SLOP} accessibilityRole="button" accessibilityLabel="Εκκαθάριση παραγγελίας">
+            <Text style={s.clearText}>Εκκαθάριση</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {table.orders.length === 0 ? (
@@ -148,6 +188,9 @@ export default function TableDetailScreen({ route, navigation }) {
               <View style={s.orderRow}>
                 <View style={s.orderInfo}>
                   <Text style={s.orderName}>{item.name}</Text>
+                  {item.options?.length > 0 && (
+                    <Text style={s.orderOptions}>➕ {item.options.map(o => o.name).join(', ')}</Text>
+                  )}
                   <View style={s.orderMetaRow}>
                     <Text style={s.orderCat}>{item.category}</Text>
                     {isFood && item.sentQty > 0 && newQty <= 0 && (
@@ -186,7 +229,7 @@ export default function TableDetailScreen({ route, navigation }) {
                     accessibilityRole="button"
                     accessibilityLabel={`Προσθήκη ενός ${item.name}`}
                   >
-                    <Text style={[s.qtyBtnText, { color: '#4ecca3' }]}>+</Text>
+                    <Text style={[s.qtyBtnText, { color: C.green }]}>+</Text>
                   </TouchableOpacity>
                 </View>
                 <Text style={s.orderPrice}>{(item.price * item.qty).toFixed(2)}€</Text>
@@ -212,6 +255,14 @@ export default function TableDetailScreen({ route, navigation }) {
       )}
 
       <View style={s.bottom}>
+        {table.orders.length > 0 && (
+          <TouchableOpacity style={s.orderNoteRow} onPress={openOrderNote} accessibilityRole="button" accessibilityLabel="Σημείωση παραγγελίας">
+            <Text style={s.orderNoteIcon}>🗒</Text>
+            <Text style={orderNote ? s.orderNoteText : s.orderNotePlaceholder} numberOfLines={1}>
+              {orderNote || 'Σημείωση παραγγελίας (πάει στην κουζίνα)...'}
+            </Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity style={s.menuBtn} onPress={() => navigation.navigate('AddItems', { tableId })} accessibilityRole="button" accessibilityLabel="Προσθήκη ειδών">
           <Text style={s.menuBtnText}>+ Προσθήκη ειδών</Text>
         </TouchableOpacity>
@@ -238,7 +289,7 @@ export default function TableDetailScreen({ route, navigation }) {
             <TextInput
               style={s.input}
               placeholder="π.χ. χωρίς πάγο, καλοψημένο..."
-              placeholderTextColor="#777"
+              placeholderTextColor={C.placeholder}
               value={noteText}
               onChangeText={setNoteText}
               autoFocus
@@ -255,6 +306,56 @@ export default function TableDetailScreen({ route, navigation }) {
             </View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Σημείωση ΟΛΗΣ της παραγγελίας — φεύγει με το επόμενο δελτίο κουζίνας */}
+      <Modal visible={orderNoteModal} transparent animationType="fade" onRequestClose={() => setOrderNoteModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.overlay}>
+          <View style={s.modal}>
+            <Text style={s.modalTitle}>Σημείωση παραγγελίας</Text>
+            <TextInput
+              style={s.input}
+              placeholder="π.χ. όλα μαζί, βιάζονται, γενέθλια..."
+              placeholderTextColor={C.placeholder}
+              value={orderNoteText}
+              onChangeText={setOrderNoteText}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={saveOrderNote}
+            />
+            <View style={s.modalBtns}>
+              <TouchableOpacity style={s.cancelBtn} onPress={() => setOrderNoteModal(false)}>
+                <Text style={s.cancelBtnText}>Άκυρο</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.confirmBtn} onPress={saveOrderNote}>
+                <Text style={s.confirmBtnText}>Αποθήκευση</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Μεταφορά όλης της παραγγελίας σε άλλο τραπέζι */}
+      <Modal visible={transferModal} transparent animationType="slide" onRequestClose={() => setTransferModal(false)}>
+        <View style={s.billOverlay}>
+          <View style={s.billSheet}>
+            <Text style={s.billTitle}>Μεταφορά σε τραπέζι</Text>
+            <Text style={s.billHint}>Όλα τα είδη θα μεταφερθούν — ό,τι έχει σταλεί στην κουζίνα δεν ξαναστέλνεται.</Text>
+            <ScrollView style={s.transferList} contentContainerStyle={{ gap: 8 }}>
+              {otherTables.map(t => (
+                <TouchableOpacity key={t.id} style={s.transferRow} onPress={() => handleTransfer(t)} accessibilityRole="button" accessibilityLabel={`Μεταφορά στο ${t.name}`}>
+                  <Text style={s.transferRowName}>{t.name}</Text>
+                  <Text style={s.transferRowMeta}>
+                    {t.orders.length > 0 ? `${t.orders.reduce((sum, o) => sum + o.qty, 0)} είδη` : 'κενό'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={s.closeBtn} onPress={() => setTransferModal(false)}>
+              <Text style={s.closeBtnText}>Άκυρο</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       {/* Λογαριασμός — Modal ώστε το κουμπί «πίσω» του Android να τον κλείνει */}
@@ -285,7 +386,9 @@ export default function TableDetailScreen({ route, navigation }) {
                     <View style={[s.checkbox, on && s.checkboxOn]}>
                       {on && <Text style={s.checkboxMark}>✓</Text>}
                     </View>
-                    <Text style={[s.billItemName, !on && s.billItemOff]}>{o.name} x{o.qty}</Text>
+                    <Text style={[s.billItemName, !on && s.billItemOff]}>
+                      {o.name}{o.options?.length ? ` (${o.options.map(x => x.name).join(', ')})` : ''} x{o.qty}
+                    </Text>
                     <Text style={[s.billItemPrice, !on && s.billItemOff]}>{(o.price * o.qty).toFixed(2)}€</Text>
                   </TouchableOpacity>
                 );
@@ -324,7 +427,7 @@ export default function TableDetailScreen({ route, navigation }) {
                   <TextInput
                     style={s.payInput}
                     placeholder={selectedTotal.toFixed(2)}
-                    placeholderTextColor="#777"
+                    placeholderTextColor={C.placeholder}
                     value={paid}
                     onChangeText={setPaid}
                     keyboardType="decimal-pad"
@@ -362,107 +465,115 @@ export default function TableDetailScreen({ route, navigation }) {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#1a1a2e' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#2d2d4e' },
+  safe: { flex: 1, backgroundColor: C.bg },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: C.border },
   backBtn: { padding: 4 },
-  backText: { color: '#4ecca3', fontSize: 16, fontWeight: '600' },
-  headerTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
+  backText: { color: C.accent, fontSize: 16, fontWeight: '600' },
+  headerTitle: { fontSize: 20, fontWeight: '700', color: C.text },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  transferBtn: { padding: 4 },
+  transferText: { color: C.blue, fontSize: 18, fontWeight: '700' },
   clearBtn: { padding: 4 },
-  clearText: { color: '#e74c3c', fontSize: 14, fontWeight: '600' },
+  clearText: { color: C.red, fontSize: 14, fontWeight: '600' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
   emptyIcon: { fontSize: 50 },
-  emptyText: { fontSize: 18, color: '#aaa', fontWeight: '600' },
-  emptyHint: { fontSize: 14, color: '#8a8a9a' },
+  emptyText: { fontSize: 18, color: C.sub, fontWeight: '600' },
+  emptyHint: { fontSize: 14, color: C.placeholder },
   list: { padding: 16, gap: 10 },
   orderRow: {
-    backgroundColor: '#16213e', borderRadius: 12, padding: 14,
+    backgroundColor: C.card, borderRadius: 12, padding: 14,
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    borderWidth: 1, borderColor: '#2d2d4e',
+    borderWidth: 1, borderColor: C.border,
   },
   orderInfo: { flex: 1 },
-  orderName: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  orderName: { fontSize: 15, fontWeight: '600', color: C.text },
+  orderOptions: { fontSize: 12, color: C.accent, marginTop: 2 },
   orderMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
-  orderCat: { fontSize: 12, color: '#888' },
-  sentBadge: { fontSize: 11, color: '#e6a23c', fontWeight: '700' },
-  newBadge: { fontSize: 11, color: '#4ecca3', fontWeight: '700' },
-  orderNote: { fontSize: 12, color: '#e6a23c', marginTop: 2, fontStyle: 'italic' },
+  orderCat: { fontSize: 12, color: C.muted },
+  sentBadge: { fontSize: 11, color: C.orange, fontWeight: '700' },
+  newBadge: { fontSize: 11, color: C.green, fontWeight: '700' },
+  orderNote: { fontSize: 12, color: C.orange, marginTop: 2, fontStyle: 'italic' },
   noteBtn: { padding: 4 },
   noteBtnText: { fontSize: 15, opacity: 0.75 },
   qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  qtyBtn: { backgroundColor: '#2d2d4e', borderRadius: 6, width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
-  qtyBtnPlus: { backgroundColor: '#1a3a2e' },
-  qtyBtnText: { color: '#e74c3c', fontSize: 18, fontWeight: '700' },
-  qtyNum: { fontSize: 16, fontWeight: '700', color: '#fff', minWidth: 24, textAlign: 'center', fontVariant: ['tabular-nums'] },
-  orderPrice: { fontSize: 15, fontWeight: '700', color: '#4ecca3', minWidth: 55, textAlign: 'right', fontVariant: ['tabular-nums'] },
+  qtyBtn: { backgroundColor: C.field, borderRadius: 6, width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border },
+  qtyBtnPlus: { backgroundColor: C.greenBg, borderColor: C.greenBg },
+  qtyBtnText: { color: C.red, fontSize: 18, fontWeight: '700' },
+  qtyNum: { fontSize: 16, fontWeight: '700', color: C.text, minWidth: 24, textAlign: 'center', fontVariant: ['tabular-nums'] },
+  orderPrice: { fontSize: 15, fontWeight: '700', color: C.green, minWidth: 55, textAlign: 'right', fontVariant: ['tabular-nums'] },
   trashBtn: { padding: 4 },
   trashText: { fontSize: 16 },
   totalRow: {
-    backgroundColor: '#16213e', borderRadius: 12, padding: 16, marginTop: 8,
+    backgroundColor: C.card, borderRadius: 12, padding: 16, marginTop: 8,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    borderWidth: 1, borderColor: '#4ecca3',
+    borderWidth: 1, borderColor: C.green,
   },
-  totalLabel: { fontSize: 18, fontWeight: '700', color: '#fff' },
-  totalValue: { fontSize: 24, fontWeight: '800', color: '#4ecca3', fontVariant: ['tabular-nums'] },
-  bottom: { padding: 16, gap: 10, borderTopWidth: 1, borderTopColor: '#2d2d4e' },
-  menuBtn: { backgroundColor: '#16213e', borderRadius: 12, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#4ecca3' },
-  menuBtnText: { color: '#4ecca3', fontSize: 16, fontWeight: '700' },
-  kitchenBtn: { backgroundColor: '#16213e', borderRadius: 12, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#e6a23c' },
-  kitchenBtnText: { color: '#e6a23c', fontSize: 16, fontWeight: '700' },
-  sentHint: { color: '#8a8a9a', fontSize: 13, textAlign: 'center', fontWeight: '600' },
-  billBtn: { backgroundColor: '#4ecca3', borderRadius: 12, padding: 16, alignItems: 'center' },
-  billBtnText: { color: '#1a1a2e', fontSize: 16, fontWeight: '800' },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 },
-  modal: { backgroundColor: '#16213e', borderRadius: 20, padding: 24, gap: 14 },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: '#fff', textAlign: 'center' },
+  totalLabel: { fontSize: 18, fontWeight: '700', color: C.text },
+  totalValue: { fontSize: 24, fontWeight: '800', color: C.green, fontVariant: ['tabular-nums'] },
+  bottom: { padding: 16, gap: 10, borderTopWidth: 1, borderTopColor: C.border },
+  orderNoteRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
+  orderNoteIcon: { fontSize: 15 },
+  orderNoteText: { flex: 1, fontSize: 13, color: C.orange, fontStyle: 'italic' },
+  orderNotePlaceholder: { flex: 1, fontSize: 13, color: C.placeholder },
+  menuBtn: { backgroundColor: C.card, borderRadius: 12, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: C.accent },
+  menuBtnText: { color: C.accent, fontSize: 16, fontWeight: '700' },
+  kitchenBtn: { backgroundColor: C.card, borderRadius: 12, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: C.orange },
+  kitchenBtnText: { color: C.orange, fontSize: 16, fontWeight: '700' },
+  sentHint: { color: C.placeholder, fontSize: 13, textAlign: 'center', fontWeight: '600' },
+  billBtn: { backgroundColor: C.accent, borderRadius: 12, padding: 16, alignItems: 'center' },
+  billBtnText: { color: C.accentText, fontSize: 16, fontWeight: '800' },
+  overlay: { flex: 1, backgroundColor: C.overlay, justifyContent: 'center', padding: 24 },
+  modal: { backgroundColor: C.card, borderRadius: 20, padding: 24, gap: 14 },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: C.text, textAlign: 'center' },
   input: {
-    backgroundColor: '#1a1a2e', borderRadius: 12, padding: 16,
-    fontSize: 16, color: '#fff', borderWidth: 1, borderColor: '#2d2d4e',
+    backgroundColor: C.field, borderRadius: 12, padding: 16,
+    fontSize: 16, color: C.text, borderWidth: 1, borderColor: C.border,
   },
   modalBtns: { flexDirection: 'row', gap: 12, marginTop: 4 },
-  cancelBtn: { flex: 1, backgroundColor: '#2d2d4e', borderRadius: 12, padding: 16, alignItems: 'center' },
-  cancelBtnText: { color: '#aaa', fontSize: 16, fontWeight: '600' },
-  confirmBtn: { flex: 1, backgroundColor: '#4ecca3', borderRadius: 12, padding: 16, alignItems: 'center' },
-  confirmBtnText: { color: '#1a1a2e', fontSize: 16, fontWeight: '700' },
-  billOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
-  billSheet: { backgroundColor: '#16213e', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%' },
-  billTitle: { fontSize: 20, fontWeight: '700', color: '#fff', textAlign: 'center', marginBottom: 6 },
+  cancelBtn: { flex: 1, backgroundColor: C.field, borderRadius: 12, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: C.border },
+  cancelBtnText: { color: C.muted, fontSize: 16, fontWeight: '600' },
+  confirmBtn: { flex: 1, backgroundColor: C.accent, borderRadius: 12, padding: 16, alignItems: 'center' },
+  confirmBtnText: { color: C.accentText, fontSize: 16, fontWeight: '700' },
+  billOverlay: { flex: 1, backgroundColor: C.overlayHeavy, justifyContent: 'flex-end' },
+  billSheet: { backgroundColor: C.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%' },
+  billTitle: { fontSize: 20, fontWeight: '700', color: C.text, textAlign: 'center', marginBottom: 6 },
   billSelectRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 },
-  billHint: { flex: 1, fontSize: 13, color: '#9a9aae' },
-  billSelectAll: { color: '#4ecca3', fontSize: 14, fontWeight: '800' },
+  billHint: { flex: 1, fontSize: 13, color: C.muted },
+  billSelectAll: { color: C.accent, fontSize: 14, fontWeight: '800' },
   billItems: { marginBottom: 12 },
   billItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
-  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: '#4ecca3', alignItems: 'center', justifyContent: 'center' },
-  checkboxOn: { backgroundColor: '#4ecca3' },
-  checkboxMark: { color: '#1a1a2e', fontSize: 14, fontWeight: '900' },
-  billItemName: { flex: 1, fontSize: 15, color: '#eee' },
-  billItemPrice: { fontSize: 15, color: '#eee', fontWeight: '600', fontVariant: ['tabular-nums'] },
-  billItemOff: { color: '#555', textDecorationLine: 'line-through' },
-  billDivider: { height: 1, backgroundColor: '#2d2d4e', marginVertical: 10 },
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: C.accent, alignItems: 'center', justifyContent: 'center' },
+  checkboxOn: { backgroundColor: C.accent },
+  checkboxMark: { color: C.accentText, fontSize: 14, fontWeight: '900' },
+  billItemName: { flex: 1, fontSize: 15, color: C.sub },
+  billItemPrice: { fontSize: 15, color: C.sub, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  billItemOff: { color: C.faint, textDecorationLine: 'line-through' },
+  billDivider: { height: 1, backgroundColor: C.border, marginVertical: 10 },
   billTotalRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
-  billTotalLabel: { fontSize: 18, fontWeight: '700', color: '#fff' },
-  billTotalVal: { fontSize: 22, fontWeight: '800', color: '#4ecca3', fontVariant: ['tabular-nums'] },
-  payLabel: { fontSize: 14, color: '#9a9aae', marginBottom: 10 },
+  billTotalLabel: { fontSize: 18, fontWeight: '700', color: C.text },
+  billTotalVal: { fontSize: 22, fontWeight: '800', color: C.green, fontVariant: ['tabular-nums'] },
+  payLabel: { fontSize: 14, color: C.muted, marginBottom: 10 },
   quickAmounts: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  quickAmount: { flex: 1, backgroundColor: '#1a1a2e', borderRadius: 10, paddingVertical: 10, alignItems: 'center', borderWidth: 1, borderColor: '#2d2d4e' },
-  quickAmountText: { color: '#4ecca3', fontSize: 14, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  payInputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a1a2e', borderRadius: 12, borderWidth: 1, borderColor: '#4ecca3', paddingHorizontal: 16, marginBottom: 16 },
-  payInput: { flex: 1, fontSize: 28, fontWeight: '800', color: '#fff', paddingVertical: 14, fontVariant: ['tabular-nums'] },
-  payInputEuro: { fontSize: 28, fontWeight: '800', color: '#4ecca3' },
-  changeRow: { backgroundColor: '#1a3a2e', borderRadius: 12, padding: 16, flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
-  changeRowRed: { backgroundColor: '#3a1a1a' },
-  changeLabel: { fontSize: 16, fontWeight: '600', color: '#4ecca3' },
-  changeVal: { fontSize: 22, fontWeight: '800', color: '#4ecca3', fontVariant: ['tabular-nums'] },
-  changeValRed: { color: '#e74c3c' },
+  quickAmount: { flex: 1, backgroundColor: C.field, borderRadius: 10, paddingVertical: 10, alignItems: 'center', borderWidth: 1, borderColor: C.border },
+  quickAmountText: { color: C.accent, fontSize: 14, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  payInputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.field, borderRadius: 12, borderWidth: 1, borderColor: C.accent, paddingHorizontal: 16, marginBottom: 16 },
+  payInput: { flex: 1, fontSize: 28, fontWeight: '800', color: C.text, paddingVertical: 14, fontVariant: ['tabular-nums'] },
+  payInputEuro: { fontSize: 28, fontWeight: '800', color: C.accent },
+  changeRow: { backgroundColor: C.greenBg, borderRadius: 12, padding: 16, flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
+  changeRowRed: { backgroundColor: C.redBg },
+  changeLabel: { fontSize: 16, fontWeight: '600', color: C.green },
+  changeVal: { fontSize: 22, fontWeight: '800', color: C.green, fontVariant: ['tabular-nums'] },
+  changeValRed: { color: C.red },
   methodRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-  methodBtn: { flex: 1, backgroundColor: '#1a1a2e', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#2d2d4e' },
-  methodBtnActive: { backgroundColor: '#1a3a2e', borderColor: '#4ecca3' },
-  methodText: { color: '#aaa', fontSize: 16, fontWeight: '700' },
-  methodTextActive: { color: '#4ecca3' },
-  cardInfo: { backgroundColor: '#1a3a2e', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 16 },
-  cardInfoText: { color: '#4ecca3', fontSize: 18, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  payBtn: { backgroundColor: '#4ecca3', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 10 },
-  payBtnText: { color: '#1a1a2e', fontSize: 17, fontWeight: '800' },
+  methodBtn: { flex: 1, backgroundColor: C.field, borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: C.border },
+  methodBtnActive: { backgroundColor: C.greenBg, borderColor: C.green },
+  methodText: { color: C.muted, fontSize: 16, fontWeight: '700' },
+  methodTextActive: { color: C.green },
+  cardInfo: { backgroundColor: C.greenBg, borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 16 },
+  cardInfoText: { color: C.green, fontSize: 18, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  payBtn: { backgroundColor: C.accent, borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 10 },
+  payBtnText: { color: C.accentText, fontSize: 17, fontWeight: '800' },
   disabled: { opacity: 0.4 },
-  closeBtn: { backgroundColor: '#2d2d4e', borderRadius: 12, padding: 14, alignItems: 'center' },
-  closeBtnText: { color: '#aaa', fontSize: 16, fontWeight: '600' },
+  closeBtn: { backgroundColor: C.field, borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: C.border },
+  closeBtnText: { color: C.muted, fontSize: 16, fontWeight: '600' },
 });

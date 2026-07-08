@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { useTasks, TASK_PRESETS } from '../context/TasksContext';
+import { C } from '../theme';
 
 export default function AssignTaskScreen() {
   const { tables, waiterName, cloudEnabled } = useApp();
@@ -25,7 +26,7 @@ export default function AssignTaskScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
-      <StatusBar barStyle="light-content" backgroundColor="#1a1a2e" />
+      <StatusBar barStyle="light-content" backgroundColor={C.bg} />
       <View style={s.header}>
         <Text style={s.headerTitle}>Δουλειές βοηθών</Text>
         <Text style={s.headerSub}>{pendingTasks.length} σε εξέλιξη</Text>
@@ -49,7 +50,7 @@ export default function AssignTaskScreen() {
         <TextInput
           style={s.input}
           placeholder="π.χ. Φέρε μενού στο 4"
-          placeholderTextColor="#777"
+          placeholderTextColor={C.placeholder}
           value={label}
           onChangeText={setLabel}
         />
@@ -58,7 +59,7 @@ export default function AssignTaskScreen() {
         <TextInput
           style={s.input}
           placeholder="Λεπτομέρειες..."
-          placeholderTextColor="#777"
+          placeholderTextColor={C.placeholder}
           value={note}
           onChangeText={setNote}
         />
@@ -98,32 +99,32 @@ export default function AssignTaskScreen() {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#1a1a2e' },
-  header: { padding: 20, paddingTop: 10, borderBottomWidth: 1, borderBottomColor: '#2d2d4e' },
-  headerTitle: { fontSize: 28, fontWeight: '800', color: '#fff' },
-  headerSub: { fontSize: 14, color: '#888', marginTop: 2 },
-  warn: { backgroundColor: '#3a2a1a', padding: 12, margin: 16, borderRadius: 10, borderWidth: 1, borderColor: '#e6a23c' },
-  warnText: { color: '#e6a23c', fontSize: 13 },
+  safe: { flex: 1, backgroundColor: C.bg },
+  header: { padding: 20, paddingTop: 10, borderBottomWidth: 1, borderBottomColor: C.border },
+  headerTitle: { fontSize: 28, fontWeight: '800', color: C.text },
+  headerSub: { fontSize: 14, color: C.muted, marginTop: 2 },
+  warn: { backgroundColor: C.orangeBg, padding: 12, margin: 16, borderRadius: 10, borderWidth: 1, borderColor: C.orange },
+  warnText: { color: C.orange, fontSize: 13 },
   body: { padding: 16, gap: 10 },
-  sectionLabel: { color: '#888', fontSize: 13, fontWeight: '700', marginTop: 8 },
+  sectionLabel: { color: C.muted, fontSize: 13, fontWeight: '700', marginTop: 8 },
   presets: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  preset: { backgroundColor: '#16213e', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 16, borderWidth: 1, borderColor: '#2d2d4e' },
-  presetOn: { backgroundColor: '#1a2f4e', borderColor: '#6ea8fe' },
-  presetText: { color: '#ccc', fontSize: 14, fontWeight: '600' },
-  presetTextOn: { color: '#6ea8fe' },
-  input: { backgroundColor: '#16213e', borderRadius: 12, padding: 14, fontSize: 16, color: '#fff', borderWidth: 1, borderColor: '#2d2d4e' },
+  preset: { backgroundColor: C.card, borderRadius: 20, paddingVertical: 10, paddingHorizontal: 16, borderWidth: 1, borderColor: C.border },
+  presetOn: { backgroundColor: C.blueBg, borderColor: C.blue },
+  presetText: { color: C.sub, fontSize: 14, fontWeight: '600' },
+  presetTextOn: { color: C.blue },
+  input: { backgroundColor: C.card, borderRadius: 12, padding: 14, fontSize: 16, color: C.text, borderWidth: 1, borderColor: C.border },
   tableChips: { gap: 8, paddingVertical: 4 },
-  chip: { backgroundColor: '#16213e', borderRadius: 16, paddingVertical: 8, paddingHorizontal: 14, borderWidth: 1, borderColor: '#2d2d4e' },
-  chipOn: { backgroundColor: '#1a2f4e', borderColor: '#6ea8fe' },
-  chipText: { color: '#ccc', fontSize: 14 },
-  chipTextOn: { color: '#6ea8fe', fontWeight: '700' },
-  sendBtn: { backgroundColor: '#6ea8fe', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 12 },
-  sendBtnText: { color: '#1a1a2e', fontSize: 16, fontWeight: '800' },
+  chip: { backgroundColor: C.card, borderRadius: 16, paddingVertical: 8, paddingHorizontal: 14, borderWidth: 1, borderColor: C.border },
+  chipOn: { backgroundColor: C.blueBg, borderColor: C.blue },
+  chipText: { color: C.sub, fontSize: 14 },
+  chipTextOn: { color: C.blue, fontWeight: '700' },
+  sendBtn: { backgroundColor: C.blue, borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 12 },
+  sendBtnText: { color: C.accentText, fontSize: 16, fontWeight: '800' },
   disabled: { opacity: 0.4 },
   pendingBox: { marginTop: 16, gap: 8 },
-  pendingRow: { backgroundColor: '#16213e', borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: '#2d2d4e' },
-  pendingLabel: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  pendingNote: { color: '#888', fontSize: 13, marginTop: 2 },
-  cancelBtn: { backgroundColor: '#3d1a1a', borderRadius: 8, padding: 8, paddingHorizontal: 12 },
-  cancelBtnText: { color: '#e74c3c', fontSize: 14, fontWeight: '700' },
+  pendingRow: { backgroundColor: C.card, borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: C.border },
+  pendingLabel: { color: C.text, fontSize: 15, fontWeight: '600' },
+  pendingNote: { color: C.muted, fontSize: 13, marginTop: 2 },
+  cancelBtn: { backgroundColor: C.redBg, borderRadius: 8, padding: 8, paddingHorizontal: 12 },
+  cancelBtnText: { color: C.red, fontSize: 14, fontWeight: '700' },
 });

@@ -9,6 +9,7 @@ import { useApp } from '../context/AppContext';
 import { confirmAction } from '../utils/confirm';
 import { beep, notify } from '../utils/notify';
 import ShiftBar from '../components/ShiftBar';
+import { C } from '../theme';
 
 export default function RunnerScreen() {
   const { firebaseEnabled, readyOrders, markServed } = useKitchen();
@@ -58,7 +59,7 @@ export default function RunnerScreen() {
   if (!firebaseEnabled) {
     return (
       <SafeAreaView style={s.safe}>
-        <StatusBar barStyle="light-content" backgroundColor="#1a1a2e" />
+        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
         <View style={s.header}>
           <Text style={s.headerTitle}>Βοηθός σέρβις</Text>
           <TouchableOpacity onPress={handleChangeRole} style={s.roleBtn}>
@@ -81,7 +82,7 @@ export default function RunnerScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
-      <StatusBar barStyle="light-content" backgroundColor="#1a1a2e" />
+      <StatusBar barStyle="light-content" backgroundColor={C.bg} />
       <View style={s.header}>
         <View>
           <Text style={s.headerTitle}>Βοηθός σέρβις</Text>
@@ -112,12 +113,14 @@ export default function RunnerScreen() {
                 <View key={o.id} style={[s.card, s.cardReady]}>
                   <View style={s.cardMain}>
                     <Text style={s.cardTable}>{o.tableName}</Text>
+                    {!!o.orderNote && <Text style={s.cardOrderNote}>🗒 {o.orderNote}</Text>}
                     <View style={s.cardItems}>
                       {o.items.map((it, idx) => (
                         <View key={idx}>
                           <Text style={s.cardItemText}>
                             <Text style={s.cardQty}>{it.qty}× </Text>{it.name}
                           </Text>
+                          {!!it.options?.length && <Text style={s.cardItemOptions}>➕ {it.options.join(', ')}</Text>}
                           {!!it.note && <Text style={s.cardItemNote}>📝 {it.note}</Text>}
                         </View>
                       ))}
@@ -151,33 +154,35 @@ export default function RunnerScreen() {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#1a1a2e' },
-  header: { padding: 20, paddingTop: 10, borderBottomWidth: 1, borderBottomColor: '#2d2d4e', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerTitle: { fontSize: 28, fontWeight: '800', color: '#fff' },
-  headerSub: { fontSize: 14, color: '#888', marginTop: 2 },
-  roleBtn: { backgroundColor: '#2d2d4e', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
-  roleBtnText: { color: '#aaa', fontSize: 13, fontWeight: '600' },
+  safe: { flex: 1, backgroundColor: C.bg },
+  header: { padding: 20, paddingTop: 10, borderBottomWidth: 1, borderBottomColor: C.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerTitle: { fontSize: 28, fontWeight: '800', color: C.text },
+  headerSub: { fontSize: 14, color: C.muted, marginTop: 2 },
+  roleBtn: { backgroundColor: C.card, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: C.border },
+  roleBtnText: { color: C.muted, fontSize: 13, fontWeight: '600' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 30 },
   emptyIcon: { fontSize: 60 },
-  emptyText: { fontSize: 18, color: '#aaa', fontWeight: '600' },
-  emptyHint: { fontSize: 14, color: '#666', textAlign: 'center' },
+  emptyText: { fontSize: 18, color: C.sub, fontWeight: '600' },
+  emptyHint: { fontSize: 14, color: C.placeholder, textAlign: 'center' },
   list: { padding: 16, gap: 18 },
   section: { gap: 10 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
   card: { borderRadius: 16, padding: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  cardReady: { backgroundColor: '#16213e', borderColor: '#4ecca3' },
-  cardTask: { backgroundColor: '#16213e', borderColor: '#6ea8fe' },
+  cardReady: { backgroundColor: C.card, borderColor: C.green },
+  cardTask: { backgroundColor: C.card, borderColor: C.blue },
   cardMain: { flex: 1, gap: 4 },
-  cardTable: { fontSize: 20, fontWeight: '800', color: '#fff' },
+  cardTable: { fontSize: 20, fontWeight: '800', color: C.text },
+  cardOrderNote: { fontSize: 13, color: C.orange, fontWeight: '700' },
   cardItems: { gap: 2, marginTop: 2 },
-  cardItemText: { fontSize: 16, color: '#eee' },
-  cardItemNote: { fontSize: 13, color: '#e6a23c', fontStyle: 'italic', marginLeft: 22 },
-  cardQty: { fontWeight: '800', color: '#4ecca3' },
-  cardTime: { fontSize: 12, color: '#888', marginTop: 4 },
-  taskLabel: { fontSize: 19, fontWeight: '800', color: '#fff' },
-  taskMeta: { fontSize: 13, color: '#888' },
-  taskNote: { fontSize: 15, color: '#cbd7ee' },
-  doneBtnGreen: { backgroundColor: '#4ecca3', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center' },
-  doneBtnBlue: { backgroundColor: '#6ea8fe', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center' },
-  doneBtnText: { color: '#1a1a2e', fontSize: 15, fontWeight: '800' },
+  cardItemText: { fontSize: 16, color: C.sub },
+  cardItemOptions: { fontSize: 13, color: C.accent, marginLeft: 22 },
+  cardItemNote: { fontSize: 13, color: C.orange, fontStyle: 'italic', marginLeft: 22 },
+  cardQty: { fontWeight: '800', color: C.green },
+  cardTime: { fontSize: 12, color: C.muted, marginTop: 4 },
+  taskLabel: { fontSize: 19, fontWeight: '800', color: C.text },
+  taskMeta: { fontSize: 13, color: C.muted },
+  taskNote: { fontSize: 15, color: C.sub },
+  doneBtnGreen: { backgroundColor: C.green, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center' },
+  doneBtnBlue: { backgroundColor: C.blue, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center' },
+  doneBtnText: { color: C.accentText, fontSize: 15, fontWeight: '800' },
 });

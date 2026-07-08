@@ -8,6 +8,7 @@ import { useApp } from '../context/AppContext';
 import { confirmAction } from '../utils/confirm';
 import { beep, notify } from '../utils/notify';
 import ShiftBar from '../components/ShiftBar';
+import { C } from '../theme';
 
 // Πόσα λεπτά αναμονής θεωρούνται «προσοχή» και «άργησε».
 const WARN_MIN = 10;
@@ -64,7 +65,7 @@ export default function KitchenScreen() {
   if (!firebaseEnabled) {
     return (
       <SafeAreaView style={s.safe}>
-        <StatusBar barStyle="light-content" backgroundColor="#1a1a2e" />
+        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
         <View style={s.header}>
           <Text style={s.headerTitle}>Κουζίνα</Text>
           <TouchableOpacity onPress={handleChangeRole} style={s.roleBtn}>
@@ -82,7 +83,7 @@ export default function KitchenScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
-      <StatusBar barStyle="light-content" backgroundColor="#1a1a2e" />
+      <StatusBar barStyle="light-content" backgroundColor={C.bg} />
       <View style={s.header}>
         <View>
           <Text style={s.headerTitle}>Κουζίνα</Text>
@@ -119,12 +120,16 @@ export default function KitchenScreen() {
                     <Text style={s.ticketTime}>{formatTime(item.createdAt)}</Text>
                   </View>
                 </View>
+                {!!item.orderNote && <Text style={s.ticketOrderNote}>🗒 {item.orderNote}</Text>}
                 <View style={s.ticketItems}>
                   {item.items.map((it, idx) => (
                     <View key={idx}>
                       <Text style={s.ticketItem}>
                         <Text style={s.ticketQty}>{it.qty}× </Text>{it.name}
                       </Text>
+                      {!!it.options?.length && (
+                        <Text style={s.ticketOptions}>➕ {it.options.join(', ')}</Text>
+                      )}
                       {!!it.note && <Text style={s.ticketNote}>📝 {it.note}</Text>}
                     </View>
                   ))}
@@ -142,31 +147,33 @@ export default function KitchenScreen() {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#1a1a2e' },
-  header: { padding: 20, paddingTop: 10, borderBottomWidth: 1, borderBottomColor: '#2d2d4e', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerTitle: { fontSize: 28, fontWeight: '800', color: '#fff' },
-  headerSub: { fontSize: 14, color: '#888', marginTop: 2 },
-  roleBtn: { backgroundColor: '#2d2d4e', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
-  roleBtnText: { color: '#aaa', fontSize: 13, fontWeight: '600' },
+  safe: { flex: 1, backgroundColor: C.bg },
+  header: { padding: 20, paddingTop: 10, borderBottomWidth: 1, borderBottomColor: C.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerTitle: { fontSize: 28, fontWeight: '800', color: C.text },
+  headerSub: { fontSize: 14, color: C.muted, marginTop: 2 },
+  roleBtn: { backgroundColor: C.card, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: C.border },
+  roleBtnText: { color: C.muted, fontSize: 13, fontWeight: '600' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 30 },
   emptyIcon: { fontSize: 60 },
-  emptyText: { fontSize: 18, color: '#aaa', fontWeight: '600' },
-  emptyHint: { fontSize: 14, color: '#8a8a9a', textAlign: 'center' },
+  emptyText: { fontSize: 18, color: C.sub, fontWeight: '600' },
+  emptyHint: { fontSize: 14, color: C.placeholder, textAlign: 'center' },
   list: { padding: 16, gap: 12 },
-  ticket: { backgroundColor: '#16213e', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e6a23c' },
-  ticketWarn: { borderColor: '#e6a23c', borderWidth: 2 },
-  ticketLate: { borderColor: '#e74c3c', borderWidth: 2 },
+  ticket: { backgroundColor: C.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: C.orange },
+  ticketWarn: { borderColor: C.orange, borderWidth: 2 },
+  ticketLate: { borderColor: C.red, borderWidth: 2 },
   ticketHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  ticketTable: { fontSize: 20, fontWeight: '800', color: '#fff' },
+  ticketTable: { fontSize: 20, fontWeight: '800', color: C.text },
   ticketTimes: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  ticketWait: { fontSize: 16, fontWeight: '800', color: '#4ecca3', fontVariant: ['tabular-nums'] },
-  waitWarn: { color: '#e6a23c' },
-  waitLate: { color: '#e74c3c' },
-  ticketTime: { fontSize: 14, color: '#888', fontVariant: ['tabular-nums'] },
+  ticketWait: { fontSize: 16, fontWeight: '800', color: C.green, fontVariant: ['tabular-nums'] },
+  waitWarn: { color: C.orange },
+  waitLate: { color: C.red },
+  ticketTime: { fontSize: 14, color: C.muted, fontVariant: ['tabular-nums'] },
+  ticketOrderNote: { fontSize: 15, color: C.orange, fontWeight: '700', marginBottom: 8, backgroundColor: C.orangeBg, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, overflow: 'hidden' },
   ticketItems: { gap: 6, marginBottom: 14 },
-  ticketItem: { fontSize: 17, color: '#eee' },
-  ticketQty: { fontWeight: '800', color: '#e6a23c' },
-  ticketNote: { fontSize: 14, color: '#e6a23c', fontStyle: 'italic', marginLeft: 24 },
-  readyBtn: { backgroundColor: '#4ecca3', borderRadius: 12, padding: 14, alignItems: 'center' },
-  readyBtnText: { color: '#1a1a2e', fontSize: 16, fontWeight: '800' },
+  ticketItem: { fontSize: 17, color: C.sub },
+  ticketQty: { fontWeight: '800', color: C.orange },
+  ticketOptions: { fontSize: 14, color: C.accent, marginLeft: 24 },
+  ticketNote: { fontSize: 14, color: C.orange, fontStyle: 'italic', marginLeft: 24 },
+  readyBtn: { backgroundColor: C.green, borderRadius: 12, padding: 14, alignItems: 'center' },
+  readyBtnText: { color: C.accentText, fontSize: 16, fontWeight: '800' },
 });

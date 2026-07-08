@@ -29,12 +29,18 @@ export function KitchenProvider({ children }) {
   // Ο σερβιτόρος στέλνει φαγητά στην κουζίνα. Τα items έρχονται ήδη ως
   // «δέλτα» (μόνο ό,τι ΔΕΝ έχει ξανασταλεί) από το TableDetailScreen,
   // ώστε δεύτερη αποστολή να μην ξαναμαγειρεύει τα ίδια πιάτα.
-  async function sendToKitchen(tableName, items, tableId = '') {
+  // options: ονόματα έξτρα ανά είδος (π.χ. «Έξτρα τυρί») — μόνο για εμφάνιση.
+  // orderNote: σημείωση για ΟΛΟ το δελτίο (π.χ. «όλα μαζί, βιάζονται»).
+  async function sendToKitchen(tableName, items, tableId = '', orderNote = '') {
     if (!firebaseEnabled || !db) return;
     await addDoc(collection(db, ORDERS), {
       tableId,
       tableName,
-      items: items.map(i => ({ name: i.name, qty: i.qty, note: i.note || '' })),
+      items: items.map(i => ({
+        name: i.name, qty: i.qty, note: i.note || '',
+        options: i.options || [],
+      })),
+      orderNote,
       status: 'pending',
       createdAt: serverTimestamp(),
     });

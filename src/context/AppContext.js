@@ -21,18 +21,38 @@ const useCloud = firebaseEnabled && !!db;
 const TABLES = 'tables';
 const SALES = 'sales';
 const MENU_DOC_ID = 'menu'; // config/menu -> { categories: [...] }
+const SETTINGS_DOC_ID = 'settings'; // config/settings -> { businessName, adminPin, ... }
+
+// Ρυθμίσεις καταστήματος (κοινές σε όλες τις συσκευές μέσω config/settings).
+// Τα στοιχεία επιχείρησης δεν εμφανίζονται πουθενά ακόμα — θα μπουν στην
+// κεφαλίδα λογαριασμού/απόδειξης όταν προστεθεί η εκτύπωση (βλ. CLAUDE.md).
+// adminPin: 4ψήφιο PIN για τη Διαχείριση· κενό = απενεργοποιημένο. Είναι
+// προστασία ευκολίας (client-side), ΟΧΙ ασφάλεια — αυτή έρχεται με τα rules.
+const DEFAULT_SETTINGS = {
+  businessName: '',
+  phone: '',
+  address: '',
+  vat: '',
+  footerNote: '',
+  waitAlertMin: 20, // τραπέζι με δελτίο σε αναμονή > τόσα λεπτά σημαίνεται στον σερβιτόρο (0 = off)
+  adminPin: '',
+};
 
 function makeId(prefix = '') {
   return `${prefix}${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// Κάθε γραμμή παραγγελίας: { lineId, itemId, name, price, qty, category, note, sentQty }
+// Κάθε γραμμή παραγγελίας: { lineId, itemId, name, price, qty, category, note, sentQty, options }
 // - lineId:  μοναδικό αναγνωριστικό γραμμής (δύο γραμμές ίδιου προϊόντος με
 //            διαφορετική σημείωση συνυπάρχουν).
 // - note:    σημείωση προς την κουζίνα, π.χ. «χωρίς κρεμμύδι».
 // - sentQty: πόσα τεμάχια έχουν ήδη σταλεί στην κουζίνα — η αποστολή στέλνει
 //            μόνο τη διαφορά (qty - sentQty), ώστε να μη μαγειρεύεται δύο
 //            φορές ό,τι στάλθηκε ήδη.
+// - options: επιλεγμένα έξτρα [{ name, delta }] (snapshot από τον κατάλογο).
+//            Το price είναι Η ΤΕΛΙΚΗ τιμή μονάδας (βάση + άθροισμα deltas),
+//            ώστε όλοι οι υπολογισμοί συνόλων να δουλεύουν όπως πριν —
+//            τα options υπάρχουν μόνο για εμφάνιση (σερβιτόρος/κουζίνα).
 // Παλιά δεδομένα (πριν το lineId) κανονικοποιούνται εδώ ώστε οι οθόνες να
 // βασίζονται πάντα στο πλήρες σχήμα.
 function normalizeLine(line) {
@@ -45,7 +65,14 @@ function normalizeLine(line) {
     category: line.category || '',
     note: line.note || '',
     sentQty: line.sentQty || 0,
+    options: Array.isArray(line.options) ? line.options : [],
   };
+}
+
+// Κλειδί σύγκρισης έξτρα: γραμμές ίδιου προϊόντος συγχωνεύονται ΜΟΝΟ αν
+// έχουν ακριβώς τα ίδια έξτρα (και καμία σημείωση).
+function optionsKey(options = []) {
+  return options.map(o => `${o.name}:${o.delta}`).sort().join('|');
 }
 
 function normalizeTable(t) {
@@ -56,9 +83,13 @@ export function AppProvider({ children }) {
   const [tables, setTables] = useState([]);
   const [menu, setMenu] = useState(MENU);
   const [history, setHistory] = useState([]);
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [role, setRoleState] = useState(null); // null | 'waiter' | 'kitchen' | 'runner'
   const [waiterName, setWaiterNameState] = useState('');
   const [loaded, setLoaded] = useState(false);
+
+  // Ξεκλείδωμα Διαχείρισης με PIN — ΜΟΝΟ in-memory: refresh = κλειδωμένο ξανά.
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
 
   // «Σε βάρδια»: ήχος/δόνηση/notification παίζουν ΜΟΝΟ σε συσκευές σε βάρδια.
   // ΣΚΟΠΙΜΑ δεν αποθηκεύεται (ούτε AsyncStorage): refresh ή νέο άνοιγμα
@@ -83,9 +114,11 @@ export function AppProvider({ children }) {
           const t = await AsyncStorage.getItem('tables');
           const m = await AsyncStorage.getItem('menu');
           const h = await AsyncStorage.getItem('history');
+          const st = await AsyncStorage.getItem('settings');
           if (t) setTables(JSON.parse(t).map(normalizeTable));
           if (m) setMenu(JSON.parse(m));
           if (h) setHistory(JSON.parse(h));
+          if (st) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(st) });
         } catch {}
       }
       setLoaded(true);
@@ -123,7 +156,19 @@ export function AppProvider({ children }) {
       err => console.warn('Menu sync error:', err)
     );
 
-    return () => { unsubTables(); unsubSales(); unsubMenu(); };
+    const settingsRef = doc(db, 'config', SETTINGS_DOC_ID);
+    const unsubSettings = onSnapshot(
+      settingsRef,
+      snap => {
+        if (snap.exists()) {
+          setSettings({ ...DEFAULT_SETTINGS, ...snap.data() });
+        }
+        // Δεν σπέρνουμε defaults εδώ — το doc δημιουργείται στο πρώτο save.
+      },
+      err => console.warn('Settings sync error:', err)
+    );
+
+    return () => { unsubTables(); unsubSales(); unsubMenu(); unsubSettings(); };
   }, []);
 
   // ---- Τοπική αποθήκευση (μόνο χωρίς Firebase) ----
@@ -132,7 +177,8 @@ export function AppProvider({ children }) {
     AsyncStorage.setItem('tables', JSON.stringify(tables)).catch(() => {});
     AsyncStorage.setItem('menu', JSON.stringify(menu)).catch(() => {});
     AsyncStorage.setItem('history', JSON.stringify(history)).catch(() => {});
-  }, [tables, menu, history, loaded]);
+    AsyncStorage.setItem('settings', JSON.stringify(settings)).catch(() => {});
+  }, [tables, menu, history, settings, loaded]);
 
   // Αυτόματο τέλος βάρδιας μετά από SHIFT_MAX_MS — καρτέλα που έμεινε
   // ανοιχτή από την προηγούμενη μέρα δεν θα χτυπάει στο σπίτι.
@@ -154,6 +200,26 @@ export function AppProvider({ children }) {
 
   function endShift() {
     setOnDuty(false);
+  }
+
+  // Ρυθμίσεις: ίδιο pattern με persistMenu — ΠΡΩΤΑ το τοπικό state, μετά το
+  // cloud, αλλιώς διαδοχικές αλλαγές πριν το snapshot echo πατάνε η μία την άλλη.
+  function saveSettings(patch) {
+    const next = { ...settings, ...patch };
+    setSettings(next);
+    if (useCloud) {
+      setDoc(doc(db, 'config', SETTINGS_DOC_ID), next)
+        .catch(err => console.warn('Αποτυχία αποθήκευσης ρυθμίσεων:', err));
+    }
+  }
+
+  // PIN Διαχείρισης. Χωρίς ορισμένο PIN η Διαχείριση είναι ελεύθερη.
+  function unlockAdmin(pin) {
+    if (!settings.adminPin || pin === settings.adminPin) {
+      setAdminUnlocked(true);
+      return true;
+    }
+    return false;
   }
 
   function setRole(r) {
@@ -220,16 +286,21 @@ export function AppProvider({ children }) {
     setTables(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
   }
 
-  function addItemToTable(tableId, item, categoryName) {
+  function addItemToTable(tableId, item, categoryName, options = []) {
+    const key = optionsKey(options);
+    const unitPrice = item.price + options.reduce((sum, o) => sum + o.delta, 0);
     writeTableOrders(tableId, orders => {
-      // Συγχωνεύουμε μόνο σε γραμμή χωρίς σημείωση — γραμμή με note μένει ξεχωριστή.
-      const existing = orders.find(o => o.itemId === item.id && !o.note);
+      // Συγχωνεύουμε μόνο σε γραμμή χωρίς σημείωση ΚΑΙ με τα ίδια έξτρα —
+      // γραμμή με note ή διαφορετικά έξτρα μένει ξεχωριστή.
+      const existing = orders.find(o =>
+        o.itemId === item.id && !o.note && optionsKey(o.options) === key
+      );
       if (existing) {
         return orders.map(o => o.lineId === existing.lineId ? { ...o, qty: o.qty + 1 } : o);
       }
       return [...orders, {
-        lineId: makeId('l'), itemId: item.id, name: item.name, price: item.price,
-        qty: 1, category: categoryName, note: '', sentQty: 0,
+        lineId: makeId('l'), itemId: item.id, name: item.name, price: unitPrice,
+        qty: 1, category: categoryName, note: '', sentQty: 0, options,
       }];
     });
   }
@@ -260,6 +331,38 @@ export function AppProvider({ children }) {
     );
   }
 
+  // Σημείωση σε επίπεδο παραγγελίας (όλο το τραπέζι) — πάει στο επόμενο
+  // δελτίο κουζίνας και καθαρίζεται μετά την αποστολή (TableDetailScreen).
+  function setTableOrderNote(tableId, orderNote) {
+    setTables(prev => prev.map(t => t.id === tableId ? { ...t, orderNote } : t));
+    if (useCloud) {
+      updateDoc(doc(db, TABLES, tableId), { orderNote })
+        .catch(err => console.warn('Αποτυχία αποθήκευσης σημείωσης:', err));
+    }
+  }
+
+  // Μεταφορά ΟΛΩΝ των γραμμών σε άλλο τραπέζι (αλλαγή τραπεζιού / ένωση
+  // παρέας). Οι γραμμές κρατούν το sentQty τους — δεν ξαναμαγειρεύεται
+  // τίποτα. Προσοχή: δελτία που ήδη στάλθηκαν δείχνουν το ΠΑΛΙΟ όνομα
+  // τραπεζιού στην κουζίνα (γνωστός περιορισμός, βλ. CLAUDE.md).
+  function transferOrders(fromId, toId) {
+    const from = tables.find(t => t.id === fromId);
+    const to = tables.find(t => t.id === toId);
+    if (!from || !to || fromId === toId) return;
+    const merged = [...to.orders, ...from.orders];
+    setTables(prev => prev.map(t => {
+      if (t.id === toId) return { ...t, orders: merged };
+      if (t.id === fromId) return { ...t, orders: [], orderNote: '' };
+      return t;
+    }));
+    if (useCloud) {
+      updateDoc(doc(db, TABLES, toId), { orders: merged })
+        .catch(err => console.warn('Αποτυχία μεταφοράς:', err));
+      updateDoc(doc(db, TABLES, fromId), { orders: [], orderNote: '' })
+        .catch(err => console.warn('Αποτυχία εκκαθάρισης πηγής:', err));
+    }
+  }
+
   // Μετά την αποστολή στην κουζίνα: ό,τι στάλθηκε θεωρείται «απεσταλμένο»
   // (sentQty = qty), ώστε η επόμενη αποστολή να στείλει μόνο τα νέα.
   function markOrdersSent(tableId, lineIds) {
@@ -285,7 +388,13 @@ export function AppProvider({ children }) {
 
     const sale = {
       tableName,
-      items: paidItems.map(o => ({ name: o.name, price: o.price, qty: o.qty })),
+      // category/options στο snapshot: τα Στατιστικά ομαδοποιούν ανά κατηγορία
+      // χωρίς lookup στον κατάλογο (που μπορεί να έχει αλλάξει στο μεταξύ).
+      items: paidItems.map(o => ({
+        name: o.name, price: o.price, qty: o.qty,
+        category: o.category || '',
+        options: (o.options || []).map(x => x.name),
+      })),
       total,
       method, // 'cash' | 'card'
       given,
@@ -338,9 +447,11 @@ export function AppProvider({ children }) {
     persistMenu(next);
   }
 
-  function updateMenuItemPrice(categoryId, itemId, newPrice) {
+  // Επεξεργασία είδους: όνομα, τιμή, έξτρα επιλογές [{id, name, delta}].
+  // Δεν αγγίζει ανοιχτούς λογαριασμούς/ιστορικό (denormalized snapshots).
+  function updateMenuItem(categoryId, itemId, patch) {
     const next = menu.map(cat => cat.id === categoryId
-      ? { ...cat, items: cat.items.map(i => i.id === itemId ? { ...i, price: newPrice } : i) }
+      ? { ...cat, items: cat.items.map(i => i.id === itemId ? { ...i, ...patch } : i) }
       : cat);
     persistMenu(next);
   }
@@ -352,16 +463,50 @@ export function AppProvider({ children }) {
     persistMenu(next);
   }
 
+  function addCategory(name, icon = '🍽️') {
+    persistMenu([...menu, { id: makeId('cat_'), name, icon, items: [] }]);
+  }
+
+  function deleteCategory(categoryId) {
+    persistMenu(menu.filter(c => c.id !== categoryId));
+  }
+
+  // Αναδιάταξη: η σειρά του πίνακα ΕΙΝΑΙ η σειρά εμφάνισης παντού
+  // (κατάλογος, προσθήκη ειδών). dir: -1 πάνω, +1 κάτω.
+  function moveCategory(categoryId, dir) {
+    const idx = menu.findIndex(c => c.id === categoryId);
+    const to = idx + dir;
+    if (idx < 0 || to < 0 || to >= menu.length) return;
+    const next = [...menu];
+    [next[idx], next[to]] = [next[to], next[idx]];
+    persistMenu(next);
+  }
+
+  function moveMenuItem(categoryId, itemId, dir) {
+    const next = menu.map(cat => {
+      if (cat.id !== categoryId) return cat;
+      const idx = cat.items.findIndex(i => i.id === itemId);
+      const to = idx + dir;
+      if (idx < 0 || to < 0 || to >= cat.items.length) return cat;
+      const items = [...cat.items];
+      [items[idx], items[to]] = [items[to], items[idx]];
+      return { ...cat, items };
+    });
+    persistMenu(next);
+  }
+
   return (
     <AppContext.Provider value={{
       tables, menu, history, role, setRole, loaded,
       waiterName, setWaiterName, cloudEnabled: useCloud,
       onDuty, startShift, endShift,
-      addTable, removeTable, clearTable, assignTable,
+      settings, saveSettings, adminUnlocked, unlockAdmin,
+      addTable, removeTable, clearTable, assignTable, transferOrders,
       addItemToTable, removeItemFromTable, incrementOrderItem, deleteOrderItem,
-      setOrderNote, markOrdersSent,
+      setOrderNote, setTableOrderNote, markOrdersSent,
       getTableTotal, payItems, clearHistory,
-      addMenuItem, updateMenuItemPrice, deleteMenuItem,
+      addMenuItem, updateMenuItem, deleteMenuItem,
+      addCategory, deleteCategory, moveCategory, moveMenuItem,
     }}>
       {children}
     </AppContext.Provider>

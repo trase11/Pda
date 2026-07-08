@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useApp } from '../context/AppContext';
+import { C } from '../theme';
 
 // Μπάρα βάρδιας για τις οθόνες που λαμβάνουν ειδοποιήσεις (κουζίνα, βοηθός).
 // Ήχος/δόνηση/notification παίζουν ΜΟΝΟ όσο η συσκευή είναι «σε βάρδια» —
@@ -43,12 +44,12 @@ export default function ShiftBar({ hint = 'Ήχος και ειδοποιήσε�
 }
 
 const s = StyleSheet.create({
-  startBar: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#1a3a2e', borderColor: '#4ecca3', borderWidth: 1, borderRadius: 12, padding: 14, margin: 16, marginBottom: 0 },
+  startBar: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.greenBg, borderColor: C.green, borderWidth: 1, borderRadius: 12, padding: 14, margin: 16, marginBottom: 0 },
   startIcon: { fontSize: 26 },
-  startTitle: { color: '#4ecca3', fontSize: 16, fontWeight: '800' },
-  startSub: { color: '#9fdcc6', fontSize: 12, marginTop: 2 },
-  onRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, backgroundColor: '#16213e', borderColor: '#2d2d4e', borderWidth: 1, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, marginHorizontal: 16, marginTop: 12, marginBottom: 0 },
-  onText: { color: '#4ecca3', fontSize: 13, fontWeight: '600', flex: 1 },
-  endBtn: { backgroundColor: '#2d2d4e', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10 },
-  endBtnText: { color: '#aaa', fontSize: 12, fontWeight: '600' },
+  startTitle: { color: C.green, fontSize: 16, fontWeight: '800' },
+  startSub: { color: C.sub, fontSize: 12, marginTop: 2 },
+  onRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, marginHorizontal: 16, marginTop: 12, marginBottom: 0 },
+  onText: { color: C.green, fontSize: 13, fontWeight: '600', flex: 1 },
+  endBtn: { backgroundColor: C.field, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: C.border },
+  endBtnText: { color: C.muted, fontSize: 12, fontWeight: '600' },
 });

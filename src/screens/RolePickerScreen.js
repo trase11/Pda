@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, StatusBar, ScrollView } from 'react-native';
 import { useApp } from '../context/AppContext';
+import { C } from '../theme';
 
 export default function RolePickerScreen() {
   const { setRole, waiterName, setWaiterName } = useApp();
@@ -15,7 +16,7 @@ export default function RolePickerScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
-      <StatusBar barStyle="light-content" backgroundColor="#1a1a2e" />
+      <StatusBar barStyle="light-content" backgroundColor={C.bg} />
       <ScrollView contentContainerStyle={s.content}>
         <Text style={s.logo}>🍹</Text>
         <Text style={s.title}>Panteboy PDA</Text>
@@ -26,7 +27,7 @@ export default function RolePickerScreen() {
           <TextInput
             style={s.nameInput}
             placeholder="π.χ. Νίκος"
-            placeholderTextColor="#777"
+            placeholderTextColor={C.placeholder}
             value={name}
             onChangeText={setName}
             returnKeyType="done"
@@ -64,22 +65,22 @@ export default function RolePickerScreen() {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#1a1a2e' },
+  safe: { flex: 1, backgroundColor: C.bg },
   content: { padding: 24, gap: 14, paddingTop: 40, paddingBottom: 40 },
   logo: { fontSize: 54, textAlign: 'center' },
-  title: { fontSize: 30, fontWeight: '800', color: '#fff', textAlign: 'center' },
-  subtitle: { fontSize: 16, color: '#888', textAlign: 'center', marginBottom: 8 },
-  nameBox: { backgroundColor: '#16213e', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#2d2d4e', gap: 8 },
-  nameLabel: { color: '#aaa', fontSize: 13, fontWeight: '600' },
-  nameInput: { backgroundColor: '#1a1a2e', borderRadius: 10, padding: 12, fontSize: 16, color: '#fff', borderWidth: 1, borderColor: '#2d2d4e' },
+  title: { fontSize: 30, fontWeight: '800', color: C.text, textAlign: 'center' },
+  subtitle: { fontSize: 16, color: C.muted, textAlign: 'center', marginBottom: 8 },
+  nameBox: { backgroundColor: C.card, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: C.border, gap: 8 },
+  nameLabel: { color: C.muted, fontSize: 13, fontWeight: '600' },
+  nameInput: { backgroundColor: C.field, borderRadius: 10, padding: 12, fontSize: 16, color: C.text, borderWidth: 1, borderColor: C.border },
   card: { borderRadius: 18, padding: 22, borderWidth: 2, gap: 6 },
   cardDisabled: { opacity: 0.55 },
-  cardWaiter: { backgroundColor: '#16213e', borderColor: '#4ecca3' },
-  cardRunner: { backgroundColor: '#16213e', borderColor: '#6ea8fe' },
-  cardKitchen: { backgroundColor: '#16213e', borderColor: '#e6a23c' },
+  cardWaiter: { backgroundColor: C.card, borderColor: C.accent },
+  cardRunner: { backgroundColor: C.card, borderColor: C.blue },
+  cardKitchen: { backgroundColor: C.card, borderColor: C.orange },
   cardIcon: { fontSize: 38 },
-  cardTitle: { fontSize: 21, fontWeight: '800', color: '#fff' },
-  cardDesc: { fontSize: 14, color: '#aaa' },
-  cardWarn: { fontSize: 12, color: '#e6a23c', marginTop: 4, fontWeight: '600' },
-  hint: { fontSize: 12, color: '#666', textAlign: 'center', marginTop: 10 },
+  cardTitle: { fontSize: 21, fontWeight: '800', color: C.text },
+  cardDesc: { fontSize: 14, color: C.muted },
+  cardWarn: { fontSize: 12, color: C.orange, marginTop: 4, fontWeight: '600' },
+  hint: { fontSize: 12, color: C.faint, textAlign: 'center', marginTop: 10 },
 });

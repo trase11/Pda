@@ -1,27 +1,66 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, Modal, TextInput,
   StyleSheet, SafeAreaView, StatusBar, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useApp } from '../context/AppContext';
+import { useKitchen } from '../context/KitchenContext';
 import { confirmAction } from '../utils/confirm';
+import { C, HIT_SLOP } from '../theme';
 
-const HIT_SLOP = { top: 10, bottom: 10, left: 10, right: 10 };
+const FILTERS = [
+  { key: 'mine', label: 'Δικά μου' },
+  { key: 'all', label: 'Όλα' },
+  { key: 'free', label: 'Ελεύθερα' },
+  { key: 'busy', label: 'Με παραγγελία' },
+];
 
 export default function TablesScreen({ navigation }) {
-  const { tables, addTable, removeTable, getTableTotal, assignTable, waiterName } = useApp();
+  const { tables, addTable, removeTable, getTableTotal, assignTable, waiterName, settings } = useApp();
+  const { pendingOrders } = useKitchen();
   const [modalVisible, setModalVisible] = useState(false);
   const [tableName, setTableName] = useState('');
   const [tableZone, setTableZone] = useState('');
-  const [filter, setFilter] = useState('mine'); // 'mine' | 'all'
+  const [filter, setFilter] = useState('mine'); // 'mine' | 'all' | 'free' | 'busy'
   const [assignTarget, setAssignTarget] = useState(null); // table being (re)assigned
   const [assignName, setAssignName] = useState('');
   const [assignZone, setAssignZone] = useState('');
   const zoneInputRef = useRef(null);
 
-  const visibleTables = filter === 'mine'
-    ? tables.filter(t => (t.assignedTo || '') === waiterName)
-    : tables;
+  // Τικ κάθε 30" για το badge καθυστέρησης κουζίνας.
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Πόσα λεπτά περιμένει το ΠΑΛΑΙΟΤΕΡΟ pending δελτίο του τραπεζιού.
+  // Πάνω από settings.waitAlertMin το τραπέζι σημαίνεται κόκκινο στον
+  // σερβιτόρο (0 = απενεργοποιημένο). Δελτία δρομολογούνται με tableId.
+  function oldestPendingMins(tableId) {
+    let oldest = 0;
+    pendingOrders.forEach(o => {
+      if (o.tableId !== tableId || !o.createdAt) return;
+      const d = o.createdAt.toDate ? o.createdAt.toDate() : new Date(o.createdAt);
+      const mins = Math.floor((now - d.getTime()) / 60000);
+      if (mins > oldest) oldest = mins;
+    });
+    return oldest;
+  }
+
+  const counts = {
+    mine: tables.filter(t => (t.assignedTo || '') === waiterName).length,
+    all: tables.length,
+    free: tables.filter(t => t.orders.length === 0).length,
+    busy: tables.filter(t => t.orders.length > 0).length,
+  };
+
+  const visibleTables = tables.filter(t => {
+    if (filter === 'mine') return (t.assignedTo || '') === waiterName;
+    if (filter === 'free') return t.orders.length === 0;
+    if (filter === 'busy') return t.orders.length > 0;
+    return true;
+  });
 
   function handleAdd() {
     const name = tableName.trim();
@@ -60,26 +99,30 @@ export default function TablesScreen({ navigation }) {
 
   return (
     <SafeAreaView style={s.safe}>
-      <StatusBar barStyle="light-content" backgroundColor="#1a1a2e" />
+      <StatusBar barStyle="light-content" backgroundColor={C.bg} />
       <View style={s.header}>
         <View style={s.headerTop}>
           <Text style={s.headerTitle}>Τραπέζια</Text>
           <Text style={s.headerName}>👤 {waiterName}</Text>
         </View>
         <View style={s.filterRow}>
-          <TouchableOpacity style={[s.filterBtn, filter === 'mine' && s.filterBtnOn]} onPress={() => setFilter('mine')}>
-            <Text style={[s.filterText, filter === 'mine' && s.filterTextOn]}>Τα δικά μου ({tables.filter(t => (t.assignedTo || '') === waiterName).length})</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[s.filterBtn, filter === 'all' && s.filterBtnOn]} onPress={() => setFilter('all')}>
-            <Text style={[s.filterText, filter === 'all' && s.filterTextOn]}>Όλα ({tables.length})</Text>
-          </TouchableOpacity>
+          {FILTERS.map(f => (
+            <TouchableOpacity key={f.key} style={[s.filterBtn, filter === f.key && s.filterBtnOn]} onPress={() => setFilter(f.key)}>
+              <Text style={[s.filterText, filter === f.key && s.filterTextOn]}>{f.label} ({counts[f.key]})</Text>
+            </TouchableOpacity>
+          ))}
         </View>
       </View>
 
       {visibleTables.length === 0 ? (
         <View style={s.empty}>
           <Text style={s.emptyIcon}>🪑</Text>
-          <Text style={s.emptyText}>{filter === 'mine' ? 'Δεν έχεις τραπέζια στο πόστο σου' : 'Δεν υπάρχουν ανοιχτά τραπέζια'}</Text>
+          <Text style={s.emptyText}>
+            {filter === 'mine' ? 'Δεν έχεις τραπέζια στο πόστο σου'
+              : filter === 'free' ? 'Κανένα ελεύθερο τραπέζι'
+              : filter === 'busy' ? 'Καμία ανοιχτή παραγγελία'
+              : 'Δεν υπάρχουν ανοιχτά τραπέζια'}
+          </Text>
           <Text style={s.emptyHint}>Πάτα το + για να ανοίξεις νέο</Text>
         </View>
       ) : (
@@ -90,12 +133,15 @@ export default function TablesScreen({ navigation }) {
           renderItem={({ item }) => {
             const total = getTableTotal(item.id);
             const itemCount = item.orders.reduce((sum, o) => sum + o.qty, 0);
+            const waitMins = settings.waitAlertMin > 0 ? oldestPendingMins(item.id) : 0;
+            const lateKitchen = settings.waitAlertMin > 0 && waitMins >= settings.waitAlertMin;
             return (
-              <TouchableOpacity style={s.card} onPress={() => navigation.navigate('TableDetail', { tableId: item.id })} activeOpacity={0.8}>
+              <TouchableOpacity style={[s.card, lateKitchen && s.cardLate]} onPress={() => navigation.navigate('TableDetail', { tableId: item.id })} activeOpacity={0.8}>
                 <View style={s.cardLeft}>
                   <View style={s.cardNameRow}>
                     <Text style={s.cardName}>{item.name}</Text>
                     {!!item.zone && <Text style={s.zoneBadge}>{item.zone}</Text>}
+                    {lateKitchen && <Text style={s.lateBadge}>⏱ κουζίνα {waitMins}′</Text>}
                   </View>
                   <Text style={s.cardTime}>Από {formatTime(item.createdAt)}</Text>
                   <Text style={s.cardItems}>{itemCount > 0 ? `${itemCount} αντικείμενα` : 'Κενή παραγγελία'}</Text>
@@ -127,7 +173,7 @@ export default function TablesScreen({ navigation }) {
             <TextInput
               style={s.input}
               placeholder="Όνομα π.χ. Τραπέζι 1, Μπαρ..."
-              placeholderTextColor="#777"
+              placeholderTextColor={C.placeholder}
               value={tableName}
               onChangeText={setTableName}
               autoFocus
@@ -139,7 +185,7 @@ export default function TablesScreen({ navigation }) {
               ref={zoneInputRef}
               style={s.input}
               placeholder="Ζώνη/πόστο (προαιρετικό) π.χ. Βεράντα"
-              placeholderTextColor="#777"
+              placeholderTextColor={C.placeholder}
               value={tableZone}
               onChangeText={setTableZone}
               returnKeyType="done"
@@ -174,7 +220,7 @@ export default function TablesScreen({ navigation }) {
             <TextInput
               style={s.input}
               placeholder="Όνομα σερβιτόρου"
-              placeholderTextColor="#666"
+              placeholderTextColor={C.placeholder}
               value={assignName}
               onChangeText={setAssignName}
             />
@@ -182,7 +228,7 @@ export default function TablesScreen({ navigation }) {
             <TextInput
               style={s.input}
               placeholder="π.χ. Βεράντα, Μπαρ, Εσωτερικό"
-              placeholderTextColor="#666"
+              placeholderTextColor={C.placeholder}
               value={assignZone}
               onChangeText={setAssignZone}
             />
@@ -202,60 +248,62 @@ export default function TablesScreen({ navigation }) {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#1a1a2e' },
-  header: { padding: 20, paddingTop: 10, borderBottomWidth: 1, borderBottomColor: '#2d2d4e', gap: 12 },
+  safe: { flex: 1, backgroundColor: C.bg },
+  header: { padding: 20, paddingTop: 10, borderBottomWidth: 1, borderBottomColor: C.border, gap: 12 },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerTitle: { fontSize: 28, fontWeight: '800', color: '#fff' },
-  headerName: { fontSize: 14, color: '#4ecca3', fontWeight: '700' },
-  filterRow: { flexDirection: 'row', gap: 8 },
-  filterBtn: { flex: 1, backgroundColor: '#16213e', borderRadius: 10, paddingVertical: 10, alignItems: 'center', borderWidth: 1, borderColor: '#2d2d4e' },
-  filterBtnOn: { backgroundColor: '#1a3a2e', borderColor: '#4ecca3' },
-  filterText: { color: '#888', fontSize: 13, fontWeight: '600' },
-  filterTextOn: { color: '#4ecca3' },
+  headerTitle: { fontSize: 28, fontWeight: '800', color: C.text },
+  headerName: { fontSize: 14, color: C.accent, fontWeight: '700' },
+  filterRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  filterBtn: { backgroundColor: C.card, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 10, alignItems: 'center', borderWidth: 1, borderColor: C.border },
+  filterBtnOn: { backgroundColor: C.accentBg, borderColor: C.accent },
+  filterText: { color: C.muted, fontSize: 13, fontWeight: '600' },
+  filterTextOn: { color: C.accent },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 20 },
   emptyIcon: { fontSize: 60 },
-  emptyText: { fontSize: 18, color: '#aaa', fontWeight: '600', textAlign: 'center' },
-  emptyHint: { fontSize: 14, color: '#8a8a9a' },
+  emptyText: { fontSize: 18, color: C.sub, fontWeight: '600', textAlign: 'center' },
+  emptyHint: { fontSize: 14, color: C.placeholder },
   list: { padding: 16, gap: 12 },
   card: {
-    backgroundColor: '#16213e', borderRadius: 16, padding: 20,
+    backgroundColor: C.card, borderRadius: 16, padding: 20,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    borderWidth: 1, borderColor: '#2d2d4e',
+    borderWidth: 1, borderColor: C.border,
   },
+  cardLate: { borderColor: C.red, borderWidth: 2 },
   cardLeft: { flex: 1, gap: 2 },
   cardNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  cardName: { fontSize: 20, fontWeight: '700', color: '#fff' },
-  zoneBadge: { fontSize: 11, color: '#6ea8fe', backgroundColor: '#1a2f4e', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden', fontWeight: '700' },
-  cardTime: { fontSize: 13, color: '#888', marginTop: 4 },
-  cardItems: { fontSize: 13, color: '#4ecca3', marginTop: 2 },
+  cardName: { fontSize: 20, fontWeight: '700', color: C.text },
+  zoneBadge: { fontSize: 11, color: C.blue, backgroundColor: C.blueBg, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden', fontWeight: '700' },
+  lateBadge: { fontSize: 11, color: C.red, backgroundColor: C.redBg, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden', fontWeight: '700' },
+  cardTime: { fontSize: 13, color: C.muted, marginTop: 4 },
+  cardItems: { fontSize: 13, color: C.green, marginTop: 2 },
   assignChip: { marginTop: 6, alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 8, marginLeft: -8 },
-  assignChipText: { fontSize: 12, color: '#aaa' },
+  assignChipText: { fontSize: 12, color: C.muted },
   cardRight: { alignItems: 'flex-end', gap: 10 },
-  cardTotal: { fontSize: 24, fontWeight: '800', color: '#4ecca3', fontVariant: ['tabular-nums'] },
-  deleteBtn: { backgroundColor: '#3d1a1a', borderRadius: 8, padding: 6, paddingHorizontal: 10 },
-  deleteBtnText: { color: '#e74c3c', fontSize: 14, fontWeight: '700' },
+  cardTotal: { fontSize: 24, fontWeight: '800', color: C.green, fontVariant: ['tabular-nums'] },
+  deleteBtn: { backgroundColor: C.redBg, borderRadius: 8, padding: 6, paddingHorizontal: 10 },
+  deleteBtnText: { color: C.red, fontSize: 14, fontWeight: '700' },
   fab: {
     position: 'absolute', bottom: 30, right: 24,
-    backgroundColor: '#4ecca3', width: 60, height: 60,
+    backgroundColor: C.accent, width: 60, height: 60,
     borderRadius: 30, alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#4ecca3', shadowOpacity: 0.4, shadowRadius: 12, elevation: 8,
+    shadowColor: C.accent, shadowOpacity: 0.4, shadowRadius: 12, elevation: 8,
   },
-  fabText: { fontSize: 30, color: '#1a1a2e', fontWeight: '700', marginTop: -2 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  modal: { backgroundColor: '#16213e', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 14 },
-  modalTitle: { fontSize: 22, fontWeight: '700', color: '#fff', textAlign: 'center' },
-  assignLabel: { color: '#888', fontSize: 13, fontWeight: '700' },
+  fabText: { fontSize: 30, color: C.accentText, fontWeight: '700', marginTop: -2 },
+  overlay: { flex: 1, backgroundColor: C.overlay, justifyContent: 'flex-end' },
+  modal: { backgroundColor: C.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 14 },
+  modalTitle: { fontSize: 22, fontWeight: '700', color: C.text, textAlign: 'center' },
+  assignLabel: { color: C.muted, fontSize: 13, fontWeight: '700' },
   quickRow: { flexDirection: 'row', gap: 8 },
-  quickBtn: { flex: 1, backgroundColor: '#1a1a2e', borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#2d2d4e' },
-  quickBtnText: { color: '#4ecca3', fontSize: 13, fontWeight: '600' },
+  quickBtn: { flex: 1, backgroundColor: C.field, borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: C.border },
+  quickBtnText: { color: C.accent, fontSize: 13, fontWeight: '600' },
   input: {
-    backgroundColor: '#1a1a2e', borderRadius: 12, padding: 16,
-    fontSize: 16, color: '#fff', borderWidth: 1, borderColor: '#2d2d4e',
+    backgroundColor: C.field, borderRadius: 12, padding: 16,
+    fontSize: 16, color: C.text, borderWidth: 1, borderColor: C.border,
   },
   modalBtns: { flexDirection: 'row', gap: 12, marginTop: 4 },
-  cancelBtn: { flex: 1, backgroundColor: '#2d2d4e', borderRadius: 12, padding: 16, alignItems: 'center' },
-  cancelBtnText: { color: '#aaa', fontSize: 16, fontWeight: '600' },
-  confirmBtn: { flex: 1, backgroundColor: '#4ecca3', borderRadius: 12, padding: 16, alignItems: 'center' },
-  confirmBtnText: { color: '#1a1a2e', fontSize: 16, fontWeight: '700' },
+  cancelBtn: { flex: 1, backgroundColor: C.field, borderRadius: 12, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: C.border },
+  cancelBtnText: { color: C.muted, fontSize: 16, fontWeight: '600' },
+  confirmBtn: { flex: 1, backgroundColor: C.accent, borderRadius: 12, padding: 16, alignItems: 'center' },
+  confirmBtnText: { color: C.accentText, fontSize: 16, fontWeight: '700' },
   disabled: { opacity: 0.4 },
 });

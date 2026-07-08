@@ -10,12 +10,13 @@ import { TasksProvider } from './src/context/TasksContext';
 import TablesScreen from './src/screens/TablesScreen';
 import TableDetailScreen from './src/screens/TableDetailScreen';
 import AddItemsScreen from './src/screens/AddItemsScreen';
-import MenuManagerScreen from './src/screens/MenuManagerScreen';
+import ManageScreen from './src/screens/ManageScreen';
 import KitchenScreen from './src/screens/KitchenScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import RolePickerScreen from './src/screens/RolePickerScreen';
 import RunnerScreen from './src/screens/RunnerScreen';
 import AssignTaskScreen from './src/screens/AssignTaskScreen';
+import { C } from './src/theme';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -36,9 +37,9 @@ function WaiterApp() {
       <Tab.Navigator
         screenOptions={{
           headerShown: false,
-          tabBarStyle: { backgroundColor: '#16213e', borderTopColor: '#2d2d4e', paddingBottom: 8, height: 60 },
-          tabBarActiveTintColor: '#4ecca3',
-          tabBarInactiveTintColor: '#666',
+          tabBarStyle: { backgroundColor: C.card, borderTopColor: C.border, paddingBottom: 8, height: 60 },
+          tabBarActiveTintColor: C.accent,
+          tabBarInactiveTintColor: C.faint,
           tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
         }}
       >
@@ -67,11 +68,11 @@ function WaiterApp() {
           }}
         />
         <Tab.Screen
-          name="MenuTab"
-          component={MenuManagerScreen}
+          name="ManageTab"
+          component={ManageScreen}
           options={{
-            tabBarLabel: 'Κατάλογος',
-            tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📋</Text>,
+            tabBarLabel: 'Διαχείριση',
+            tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>⚙️</Text>,
           }}
         />
       </Tab.Navigator>
@@ -83,7 +84,7 @@ function Root() {
   const { role, loaded } = useApp();
 
   if (!loaded) {
-    return <View style={{ flex: 1, backgroundColor: '#1a1a2e' }} />;
+    return <View style={{ flex: 1, backgroundColor: C.bg }} />;
   }
   if (!role) {
     return <RolePickerScreen />;
