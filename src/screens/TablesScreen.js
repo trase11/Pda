@@ -21,6 +21,8 @@ export default function TablesScreen({ navigation }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [tableName, setTableName] = useState('');
   const [tableZone, setTableZone] = useState('');
+  const [tableSeats, setTableSeats] = useState('');
+  const [bulkCount, setBulkCount] = useState('');
   const [filter, setFilter] = useState('mine'); // 'mine' | 'all' | 'free' | 'busy'
   const [assignTarget, setAssignTarget] = useState(null); // table being (re)assigned
   const [assignName, setAssignName] = useState('');
@@ -62,12 +64,39 @@ export default function TablesScreen({ navigation }) {
     return true;
   });
 
+  function parseSeats() {
+    const n = parseInt(tableSeats, 10);
+    return isNaN(n) || n <= 0 ? 0 : n;
+  }
+
   function handleAdd() {
     const name = tableName.trim();
     if (!name) return;
-    addTable(name, { zone: tableZone.trim(), assignedTo: waiterName });
+    addTable(name, { zone: tableZone.trim(), assignedTo: waiterName, seats: parseSeats() });
     setTableName('');
     setTableZone('');
+    setTableSeats('');
+    setModalVisible(false);
+  }
+
+  // Μαζική δημιουργία «Τραπέζι Ν» — η αρίθμηση συνεχίζει από το μεγαλύτερο
+  // υπάρχον «Τραπέζι Χ» ώστε να μην βγουν διπλά ονόματα (η κουζίνα
+  // δρομολογεί με όνομα τραπεζιού).
+  function handleBulkAdd() {
+    const count = parseInt(bulkCount, 10);
+    if (isNaN(count) || count <= 0) return;
+    let start = 0;
+    tables.forEach(t => {
+      const m = /^Τραπέζι (\d+)$/.exec(t.name);
+      if (m) start = Math.max(start, parseInt(m[1], 10));
+    });
+    const seats = parseSeats();
+    for (let i = 1; i <= Math.min(count, 50); i++) {
+      addTable(`Τραπέζι ${start + i}`, { zone: tableZone.trim(), assignedTo: '', seats });
+    }
+    setBulkCount('');
+    setTableZone('');
+    setTableSeats('');
     setModalVisible(false);
   }
 
@@ -141,6 +170,7 @@ export default function TablesScreen({ navigation }) {
                   <View style={s.cardNameRow}>
                     <Text style={s.cardName}>{item.name}</Text>
                     {!!item.zone && <Text style={s.zoneBadge}>{item.zone}</Text>}
+                    {item.seats > 0 && <Text style={s.seatsBadge}>🪑 {item.seats}</Text>}
                     {lateKitchen && <Text style={s.lateBadge}>⏱ κουζίνα {waitMins}′</Text>}
                   </View>
                   <Text style={s.cardTime}>Από {formatTime(item.createdAt)}</Text>
@@ -181,22 +211,54 @@ export default function TablesScreen({ navigation }) {
               blurOnSubmit={false}
               onSubmitEditing={() => zoneInputRef.current?.focus()}
             />
-            <TextInput
-              ref={zoneInputRef}
-              style={s.input}
-              placeholder="Ζώνη/πόστο (προαιρετικό) π.χ. Βεράντα"
-              placeholderTextColor={C.placeholder}
-              value={tableZone}
-              onChangeText={setTableZone}
-              returnKeyType="done"
-              onSubmitEditing={handleAdd}
-            />
+            <View style={s.inputRow}>
+              <TextInput
+                ref={zoneInputRef}
+                style={[s.input, { flex: 2 }]}
+                placeholder="Ζώνη (προαιρετικό)"
+                placeholderTextColor={C.placeholder}
+                value={tableZone}
+                onChangeText={setTableZone}
+                returnKeyType="done"
+                onSubmitEditing={handleAdd}
+              />
+              <TextInput
+                style={[s.input, { flex: 1 }]}
+                placeholder="Θέσεις"
+                placeholderTextColor={C.placeholder}
+                value={tableSeats}
+                onChangeText={setTableSeats}
+                keyboardType="number-pad"
+              />
+            </View>
             <View style={s.modalBtns}>
-              <TouchableOpacity style={s.cancelBtn} onPress={() => { setModalVisible(false); setTableName(''); setTableZone(''); }}>
+              <TouchableOpacity style={s.cancelBtn} onPress={() => { setModalVisible(false); setTableName(''); setTableZone(''); setTableSeats(''); setBulkCount(''); }}>
                 <Text style={s.cancelBtnText}>Άκυρο</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[s.confirmBtn, !tableName.trim() && s.disabled]} onPress={handleAdd} disabled={!tableName.trim()}>
                 <Text style={s.confirmBtnText}>Άνοιγμα</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={s.bulkDivider} />
+            <Text style={s.bulkLabel}>Ή γρήγορη δημιουργία πολλών («Τραπέζι 1, 2, …»)</Text>
+            <View style={s.inputRow}>
+              <TextInput
+                style={[s.input, { flex: 1 }]}
+                placeholder="Πόσα;"
+                placeholderTextColor={C.placeholder}
+                value={bulkCount}
+                onChangeText={setBulkCount}
+                keyboardType="number-pad"
+              />
+              <TouchableOpacity
+                style={[s.bulkBtn, !(parseInt(bulkCount, 10) > 0) && s.disabled]}
+                onPress={handleBulkAdd}
+                disabled={!(parseInt(bulkCount, 10) > 0)}
+                accessibilityRole="button"
+                accessibilityLabel="Μαζική δημιουργία τραπεζιών"
+              >
+                <Text style={s.bulkBtnText}>Δημιουργία</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -273,6 +335,7 @@ const s = StyleSheet.create({
   cardNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   cardName: { fontSize: 20, fontWeight: '700', color: C.text },
   zoneBadge: { fontSize: 11, color: C.blue, backgroundColor: C.blueBg, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden', fontWeight: '700' },
+  seatsBadge: { fontSize: 11, color: C.muted, backgroundColor: C.field, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden', fontWeight: '700' },
   lateBadge: { fontSize: 11, color: C.red, backgroundColor: C.redBg, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden', fontWeight: '700' },
   cardTime: { fontSize: 13, color: C.muted, marginTop: 4 },
   cardItems: { fontSize: 13, color: C.green, marginTop: 2 },
@@ -300,6 +363,11 @@ const s = StyleSheet.create({
     backgroundColor: C.field, borderRadius: 12, padding: 16,
     fontSize: 16, color: C.text, borderWidth: 1, borderColor: C.border,
   },
+  inputRow: { flexDirection: 'row', gap: 8 },
+  bulkDivider: { height: 1, backgroundColor: C.border, marginVertical: 6 },
+  bulkLabel: { color: C.muted, fontSize: 13, fontWeight: '600' },
+  bulkBtn: { flex: 1, backgroundColor: C.field, borderRadius: 12, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: C.accent },
+  bulkBtnText: { color: C.accent, fontSize: 15, fontWeight: '700' },
   modalBtns: { flexDirection: 'row', gap: 12, marginTop: 4 },
   cancelBtn: { flex: 1, backgroundColor: C.field, borderRadius: 12, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: C.border },
   cancelBtnText: { color: C.muted, fontSize: 16, fontWeight: '600' },

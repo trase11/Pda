@@ -26,8 +26,8 @@ snapshot echo ενημερώνει όλες τις συσκευές. Χωρίς 
 | src/components/ShiftBar.js | Μπάρα «Έναρξη/Τέλος βάρδιας» — gate όλων των ειδοποιήσεων | prop `hint` |
 | src/components/PinGate.js | Κλείδωμα Διαχείρισης με `settings.adminPin`· χωρίς PIN = ελεύθερο· unlock in-memory | wraps children |
 | src/screens/RolePickerScreen.js | Επιλογή ρόλου + όνομα σερβιτόρου → AsyncStorage | `pickWaiter` |
-| src/screens/TablesScreen.js | Λίστα τραπεζιών· φίλτρα Δικά μου/Όλα/Ελεύθερα/Με παραγγελία· badge «⏱ κουζίνα Χ′» αν pending δελτίο > waitAlertMin | `FILTERS`, `oldestPendingMins`, `openAssign` |
-| src/screens/TableDetailScreen.js | Η μεγαλύτερη οθόνη: γραμμές (+options), σημειώσεις γραμμής+παραγγελίας, αποστολή κουζίνας (δέλτα), μεταφορά τραπεζιού, bill sheet, πληρωμή | `handleSendToKitchen`, `handlePay`, `handleTransfer`, `payingRef` |
+| src/screens/TablesScreen.js | Λίστα τραπεζιών· φίλτρα Δικά μου/Όλα/Ελεύθερα/Με παραγγελία· badge «⏱ κουζίνα Χ′» αν pending δελτίο > waitAlertMin· θέσεις (seats) + μαζική δημιουργία «Τραπέζι Ν» | `FILTERS`, `oldestPendingMins`, `handleBulkAdd`, `openAssign` |
+| src/screens/TableDetailScreen.js | Η μεγαλύτερη οθόνη: γραμμές (+options), σημειώσεις γραμμής+παραγγελίας, αποστολή κουζίνας (δέλτα), «Σερβιρίστηκαν όλα» (μαζικό markServed), μεταφορά τραπεζιού, bill sheet, πληρωμή | `handleSendToKitchen`, `handlePay`, `handleMarkAllServed`, `handleTransfer`, `payingRef` |
 | src/screens/AddItemsScreen.js | Προσθήκη ειδών (αναζήτηση + chips)· picker έξτρα επιλογών για είδη με options | `getOrderQty`, `optionsTarget`, `confirmOptions` |
 | src/screens/KitchenScreen.js | Οθόνη κουζίνας: pending δελτία (orderNote + options), χρώμα ανά χρόνο αναμονής, ήχος σε νέο δελτίο | `WARN_MIN`/`LATE_MIN`, `prevPendingIds` |
 | src/screens/RunnerScreen.js | Οθόνη βοηθού: έτοιμα πιάτα (+options/orderNote) + δουλειές, ήχος/notification | `prevReadyIds`, `prevTaskIds` |

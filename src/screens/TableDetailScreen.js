@@ -15,7 +15,7 @@ export default function TableDetailScreen({ route, navigation }) {
     setOrderNote, setTableOrderNote, markOrdersSent, clearTable,
     getTableTotal, payItems, transferOrders,
   } = useApp();
-  const { firebaseEnabled, sendToKitchen } = useKitchen();
+  const { firebaseEnabled, sendToKitchen, readyOrders, markServed } = useKitchen();
   const table = tables.find(t => t.id === tableId);
   const [showBill, setShowBill] = useState(false);
   const [paid, setPaid] = useState('');
@@ -45,6 +45,9 @@ export default function TableDetailScreen({ route, navigation }) {
   const unsentFood = foodItems.filter(o => o.qty - o.sentQty > 0);
   const unsentCount = unsentFood.reduce((sum, o) => sum + (o.qty - o.sentQty), 0);
   const otherTables = tables.filter(t => t.id !== tableId);
+  // Έτοιμα δελτία ΑΥΤΟΥ του τραπεζιού — ο σερβιτόρος μπορεί να τα κλείσει
+  // μαζικά αν σέρβιρε ο ίδιος (αντί να το κάνει ο runner ένα-ένα).
+  const readyForTable = readyOrders.filter(o => o.tableId === tableId);
 
   const selectedItems = table.orders.filter(o => selected[o.lineId]);
   const selectedTotal = selectedItems.reduce((sum, o) => sum + o.price * o.qty, 0);
@@ -115,6 +118,12 @@ export default function TableDetailScreen({ route, navigation }) {
       () => { clearTable(tableId); setShowBill(false); setPaid(''); },
       'Εκκαθάριση'
     );
+  }
+
+  function handleMarkAllServed() {
+    readyForTable.forEach(o => {
+      markServed(o.id).catch(err => console.warn('Αποτυχία σήμανσης σερβιρίσματος:', err));
+    });
   }
 
   function handleTransfer(target) {
@@ -273,6 +282,11 @@ export default function TableDetailScreen({ route, navigation }) {
         )}
         {firebaseEnabled && unsentCount === 0 && (justSent || foodItems.length > 0) && (
           <Text style={s.sentHint}>{justSent ? '✓ Στάλθηκε στην κουζίνα' : '🍳 Όλα τα φαγητά έχουν σταλεί'}</Text>
+        )}
+        {firebaseEnabled && readyForTable.length > 0 && (
+          <TouchableOpacity style={s.servedBtn} onPress={handleMarkAllServed} accessibilityRole="button" accessibilityLabel="Σήμανση όλων ως σερβιρισμένα">
+            <Text style={s.servedBtnText}>🔔 Σερβιρίστηκαν όλα ({readyForTable.length} έτοιμα)</Text>
+          </TouchableOpacity>
         )}
         {total > 0 && (
           <TouchableOpacity style={s.billBtn} onPress={openBill} accessibilityRole="button" accessibilityLabel="Λογαριασμός">
@@ -520,6 +534,8 @@ const s = StyleSheet.create({
   kitchenBtn: { backgroundColor: C.card, borderRadius: 12, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: C.orange },
   kitchenBtnText: { color: C.orange, fontSize: 16, fontWeight: '700' },
   sentHint: { color: C.placeholder, fontSize: 13, textAlign: 'center', fontWeight: '600' },
+  servedBtn: { backgroundColor: C.card, borderRadius: 12, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: C.green },
+  servedBtnText: { color: C.green, fontSize: 16, fontWeight: '700' },
   billBtn: { backgroundColor: C.accent, borderRadius: 12, padding: 16, alignItems: 'center' },
   billBtnText: { color: C.accentText, fontSize: 16, fontWeight: '800' },
   overlay: { flex: 1, backgroundColor: C.overlay, justifyContent: 'center', padding: 24 },
