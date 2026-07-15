@@ -18,7 +18,7 @@ npx expo export --platform web   # build για web (φάκελος dist/)
 
 Deploy: push στο `main` τρέχει το GitHub Actions workflow
 (`.github/workflows/deploy.yml`) που κάνει `expo export` και ανεβάζει το `dist/`
-σε GitHub Pages. Το `app.json` έχει `experiments.baseUrl: "/Pda"` — αν αλλάξει
+σε GitHub Pages. Το `app.json` έχει `experiments.baseUrl: "/Pda1"` — αν αλλάξει
 το όνομα του repo, άλλαξε και αυτό.
 
 Δεν υπάρχουν tests ή linter ακόμα. Πριν από commit, τουλάχιστον parse-check:

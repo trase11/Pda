@@ -23,7 +23,7 @@
       "bundler": "metro"
     },
     "experiments": {
-      "baseUrl": "/Pda"
+      "baseUrl": "/Pda1"
     }
   }
 }
